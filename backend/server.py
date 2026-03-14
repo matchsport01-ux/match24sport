@@ -1449,6 +1449,159 @@ async def get_cities():
 async def get_sports():
     return SPORTS
 
+# ======================= ADMIN ENDPOINTS =======================
+
+@api_router.get("/admin/stats")
+async def get_admin_stats(current_user: dict = Depends(get_current_user)):
+    """Get admin dashboard statistics (super_admin only)"""
+    if current_user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        # Count users
+        total_users = await db.users.count_documents({})
+        total_players = await db.users.count_documents({"role": "player"})
+        total_clubs = await db.clubs.count_documents({})
+        total_matches = await db.matches.count_documents({})
+        
+        # Active subscriptions
+        active_subscriptions = await db.club_subscriptions.count_documents({
+            "status": "active",
+            "expires_at": {"$gt": datetime.now(timezone.utc)}
+        })
+        
+        # Recent registrations (last 7 days)
+        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        recent_registrations = await db.users.count_documents({
+            "created_at": {"$gte": seven_days_ago}
+        })
+        
+        # Matches today
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timedelta(days=1)
+        matches_today = await db.matches.count_documents({
+            "date": {"$gte": today_start.strftime("%Y-%m-%d"), "$lt": today_end.strftime("%Y-%m-%d")}
+        })
+        
+        # Calculate monthly revenue (mock - sum of active subscription prices)
+        revenue_month = active_subscriptions * 49.99  # Assuming monthly plan
+        
+        return {
+            "total_users": total_users,
+            "total_players": total_players,
+            "total_clubs": total_clubs,
+            "total_matches": total_matches,
+            "active_subscriptions": active_subscriptions,
+            "recent_registrations": recent_registrations,
+            "matches_today": matches_today,
+            "revenue_month": revenue_month
+        }
+    except Exception as e:
+        logger.error(f"Error fetching admin stats: {e}")
+        return {
+            "total_users": 0,
+            "total_players": 0,
+            "total_clubs": 0,
+            "total_matches": 0,
+            "active_subscriptions": 0,
+            "recent_registrations": 0,
+            "matches_today": 0,
+            "revenue_month": 0
+        }
+
+@api_router.get("/admin/users")
+async def get_admin_users(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    role: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all users (super_admin only)"""
+    if current_user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    query = {}
+    if role:
+        query["role"] = role
+    
+    cursor = db.users.find(query).skip(skip).limit(limit).sort("created_at", -1)
+    users = []
+    async for user in cursor:
+        users.append({
+            "user_id": user["user_id"],
+            "email": user["email"],
+            "name": user["name"],
+            "role": user["role"],
+            "is_active": user.get("is_active", True),
+            "created_at": user.get("created_at", "").isoformat() if isinstance(user.get("created_at"), datetime) else str(user.get("created_at", ""))
+        })
+    
+    return users
+
+@api_router.patch("/admin/users/{user_id}/status")
+async def update_user_status(
+    user_id: str,
+    status_update: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update user active status (super_admin only)"""
+    if current_user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    result = await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {"is_active": status_update.get("is_active", True)}}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"message": "User status updated"}
+
+@api_router.get("/admin/clubs")
+async def get_admin_clubs(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all clubs with stats (super_admin only)"""
+    if current_user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    cursor = db.clubs.find({}).skip(skip).limit(limit).sort("created_at", -1)
+    clubs = []
+    async for club in cursor:
+        # Get courts count
+        courts_count = await db.courts.count_documents({"club_id": club["club_id"]})
+        # Get matches count
+        matches_count = await db.matches.count_documents({"club_id": club["club_id"]})
+        # Get subscription status
+        subscription = await db.club_subscriptions.find_one({"club_id": club["club_id"]})
+        
+        sub_status = "none"
+        sub_expires = None
+        if subscription:
+            if subscription.get("status") == "trial":
+                sub_status = "trial"
+            elif subscription.get("expires_at") and subscription["expires_at"] > datetime.now(timezone.utc):
+                sub_status = "active"
+            else:
+                sub_status = "expired"
+            sub_expires = subscription.get("expires_at").isoformat() if subscription.get("expires_at") else None
+        
+        clubs.append({
+            "club_id": club["club_id"],
+            "name": club["name"],
+            "city": club.get("city", ""),
+            "address": club.get("address", ""),
+            "courts_count": courts_count,
+            "matches_count": matches_count,
+            "subscription_status": sub_status,
+            "subscription_expires": sub_expires
+        })
+    
+    return clubs
+
 @api_router.get("/")
 async def root():
     return {"message": "Match Sport 24 API", "version": "1.0.0"}

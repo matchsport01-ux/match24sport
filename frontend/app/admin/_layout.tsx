@@ -1,18 +1,18 @@
-// Club Layout with Tab Navigation
+// Admin Layout with Tab Navigation
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../src/utils/constants';
 import { useLanguage } from '../../src/contexts/LanguageContext';
 
-export default function ClubLayout() {
+export default function AdminLayout() {
   const { t } = useLanguage();
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: COLORS.secondary,
+        tabBarActiveTintColor: COLORS.warning,
         tabBarInactiveTintColor: COLORS.textMuted,
         tabBarStyle: {
           backgroundColor: COLORS.surface,
@@ -31,27 +31,27 @@ export default function ClubLayout() {
       <Tabs.Screen
         name="dashboard"
         options={{
-          title: t('dashboard'),
+          title: 'Dashboard',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="grid-outline" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="courts"
+        name="users"
         options={{
-          title: t('courts'),
+          title: 'Utenti',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="tennisball-outline" size={size} color={color} />
+            <Ionicons name="people-outline" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="matches"
+        name="clubs"
         options={{
-          title: t('matches'),
+          title: 'Circoli',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="calendar-outline" size={size} color={color} />
+            <Ionicons name="business-outline" size={size} color={color} />
           ),
         }}
       />
@@ -62,43 +62,6 @@ export default function ClubLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="settings-outline" size={size} color={color} />
           ),
-        }}
-      />
-      {/* Hidden screens - not shown in tab bar */}
-      <Tabs.Screen
-        name="add-court"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="create-match"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="onboarding"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="edit-profile"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="subscription"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="notifications"
-        options={{
-          href: null,
         }}
       />
     </Tabs>

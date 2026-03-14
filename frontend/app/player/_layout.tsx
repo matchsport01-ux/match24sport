@@ -64,6 +64,25 @@ export default function PlayerLayout() {
           ),
         }}
       />
+      {/* Hidden screens - not shown in tab bar */}
+      <Tabs.Screen
+        name="onboarding"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="edit-profile"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

@@ -40,7 +40,9 @@ export default function Index() {
 
     // Redirect based on auth status
     if (!isLoading && isAuthenticated && user) {
-      if (user.role === 'club_admin') {
+      if (user.role === 'super_admin') {
+        router.replace('/admin/dashboard');
+      } else if (user.role === 'club_admin') {
         router.replace('/club/dashboard');
       } else {
         router.replace('/player/home');
