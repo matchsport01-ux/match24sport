@@ -1,5 +1,5 @@
 // Main Entry Screen - Landing/Auth Check
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Image, Dimensions, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,8 +14,19 @@ const { width, height } = Dimensions.get('window');
 
 export default function Index() {
   const router = useRouter();
-  const { user, isLoading, isAuthenticated } = useAuth();
+  const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { t } = useLanguage();
+  const [forceShow, setForceShow] = useState(false);
+
+  // Force show content after 3 seconds to prevent infinite loading
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setForceShow(true);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const isLoading = authLoading && !forceShow;
 
   useEffect(() => {
     // Check URL for session_id (Google OAuth callback)
