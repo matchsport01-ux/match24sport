@@ -260,57 +260,69 @@ backend:
 frontend:
   - task: "Landing Page"
     implemented: true
-    working: true
+    working: false
     file: "/app/frontend/app/index.tsx"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
       - working: true
         agent: "main"
         comment: "Screenshot verified - landing page renders correctly."
+      - working: false
+        agent: "testing"
+        comment: "CRITICAL: App stuck on loading screen 'Caricamento...'. AuthContext isLoading state never resolves. Applied timeout fix but issue persists. Frontend UI completely blocked."
 
   - task: "Login Screen"
     implemented: true
-    working: true
+    working: false
     file: "/app/frontend/app/auth/login.tsx"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
       - working: true
         agent: "main"
         comment: "Screenshot verified - login form renders correctly."
+      - working: false
+        agent: "testing"
+        comment: "Cannot access due to loading screen issue. Navigation blocked by persistent 'Caricamento...' state."
 
   - task: "Register Screen (Player)"
     implemented: true
-    working: true
+    working: false
     file: "/app/frontend/app/auth/register.tsx"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
       - working: true
         agent: "main"
         comment: "Screenshot verified - registration form renders correctly."
+      - working: false
+        agent: "testing"
+        comment: "Cannot access due to loading screen issue. Navigation blocked by persistent 'Caricamento...' state."
 
   - task: "Player Search Screen"
     implemented: true
-    working: true
+    working: false
     file: "/app/frontend/app/player/search.tsx"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
       - working: true
         agent: "main"
         comment: "Screenshot verified - search page renders, match cards displayed."
+      - working: false
+        agent: "testing"
+        comment: "Cannot access due to loading screen issue. Navigation blocked by persistent 'Caricamento...' state."
 
   - task: "Match Detail Screen"
     implemented: true
-    working: true
+    working: false
     file: "/app/frontend/app/match/[id]/index.tsx"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
@@ -320,6 +332,9 @@ frontend:
       - working: true
         agent: "main"
         comment: "Import paths corrected, should now render correctly."
+      - working: false
+        agent: "testing"
+        comment: "Cannot access due to loading screen issue. Navigation blocked by persistent 'Caricamento...' state."
 
 metadata:
   created_by: "main_agent"
@@ -329,11 +344,16 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Full auth flow end-to-end"
-    - "Match booking flow"
-  stuck_tasks: []
+    - "Frontend loading screen issue"
+    - "AuthContext infinite loading fix"
+  stuck_tasks:
+    - "Landing Page"
+    - "Login Screen"  
+    - "Register Screen (Player)"
+    - "Player Search Screen"
+    - "Match Detail Screen"
   test_all: false
-  test_priority: "high_first"
+  test_priority: "stuck_first"
 
 agent_communication:
   - agent: "main"
@@ -360,3 +380,24 @@ agent_communication:
       
       Tested with realistic data using Italian names, proper sport formats, and full match workflows.
       All critical backend functionality verified. No major issues found.
+  - agent: "testing"
+    message: |
+      CRITICAL FRONTEND ISSUE IDENTIFIED: Frontend app stuck on loading screen ("Caricamento...")
+      
+      INVESTIGATION FINDINGS:
+      - Backend APIs are healthy and working correctly
+      - Expo service running and bundling successfully
+      - Issue appears to be in AuthContext where isLoading state never resolves
+      - Applied timeout fix to AuthContext checkAuth function (5-second failsafe)
+      - Cleared caches and restarted services multiple times
+      
+      ATTEMPTED FIXES:
+      1. Added timeout mechanism to AuthContext to prevent infinite loading
+      2. Cleared Metro cache, node_modules cache, and .expo cache
+      3. Restarted Expo service multiple times
+      4. Verified backend connectivity - all APIs responding correctly
+      
+      ROOT CAUSE: Likely AuthContext async operations hanging on web platform
+      STATUS: Frontend UI testing blocked due to persistent loading screen
+      
+      RECOMMENDATION: Main agent should investigate further or implement alternative auth initialization

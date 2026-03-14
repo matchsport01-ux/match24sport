@@ -32,6 +32,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const checkAuth = useCallback(async () => {
+    // Add timeout to prevent infinite loading
+    const timeout = setTimeout(() => {
+      console.log('Auth check timeout - setting loading to false');
+      setIsLoading(false);
+    }, 5000);
+
     try {
       // Check for existing token
       let token: string | null = null;
@@ -47,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.log('Auth check error:', error);
     } finally {
+      clearTimeout(timeout);
       setIsLoading(false);
     }
   }, [refreshUser]);
