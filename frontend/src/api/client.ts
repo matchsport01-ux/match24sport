@@ -298,6 +298,17 @@ class APIClient {
     return response.data;
   }
 
+  // Promo codes
+  async validatePromoCode(code: string) {
+    const response = await this.client.post('/promo/validate', { code });
+    return response.data;
+  }
+
+  async applyTrialPromo(code: string) {
+    const response = await this.client.post('/promo/apply-trial', { code });
+    return response.data;
+  }
+
   // Utility
   async getCities() {
     const response = await this.client.get('/cities');

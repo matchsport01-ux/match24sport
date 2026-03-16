@@ -10,6 +10,7 @@ import {
   ScrollView,
   Alert,
   Linking,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -74,8 +75,13 @@ export default function LoginScreen() {
           </TouchableOpacity>
 
           <View style={styles.header}>
-            <View style={styles.logoIcon}>
-              <Ionicons name="tennisball" size={32} color={COLORS.primary} />
+            <View style={styles.logoContainer}>
+              <Image
+                source={{ uri: 'https://customer-assets.emergentagent.com/job_padel-finder-app/artifacts/8etm8mej_logo.svg' }}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+              <Text style={styles.logoText}>Match Sport 24</Text>
             </View>
             <Text style={styles.title}>{t('login')}</Text>
             <Text style={styles.subtitle}>Accedi al tuo account Match Sport 24</Text>
@@ -168,16 +174,22 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginVertical: 32,
+    marginVertical: 24,
   },
-  logoIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: COLORS.surface,
+  logoContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: 16,
+  },
+  logoImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 20,
+  },
+  logoText: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.primary,
+    marginTop: 8,
   },
   title: {
     fontSize: 28,

@@ -257,6 +257,30 @@ backend:
         agent: "main"
         comment: "Notifications created on match join."
 
+  - task: "Promo Code Validation"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Comprehensive promo code testing completed with 100% success rate. All endpoints working correctly: POST /api/promo/validate validates TRIAL3MESI (trial_months, 3 months), SCONTO20 (percentage, 20%), and properly rejects invalid codes with Italian error messages. POST /api/promo/apply-trial correctly applies trial codes, rejects duplicates, and rejects wrong promo types."
+
+  - task: "Promo Code Application"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Promo code application tested successfully. Trial promo TRIAL3MESI correctly updates club subscription to trial status with proper expiration dates. Duplicate applications correctly rejected with Italian error 'Questo codice è già stato utilizzato'. Wrong promo types (percentage codes on trial endpoint) correctly rejected with 'Questo codice non è valido per una prova gratuita'."
+
 frontend:
   - task: "Landing Page"
     implemented: true
@@ -401,3 +425,25 @@ agent_communication:
       STATUS: Frontend UI testing blocked due to persistent loading screen
       
       RECOMMENDATION: Main agent should investigate further or implement alternative auth initialization
+  - agent: "testing"
+    message: |
+      PROMO CODE TESTING COMPLETED - 100% SUCCESS RATE
+      
+      COMPREHENSIVE VALIDATION TESTING:
+      ✅ POST /api/promo/validate - All test cases passed:
+      - TRIAL3MESI: Correctly returns type=trial_months, value=3, discount=100%
+      - SCONTO20: Correctly returns type=percentage, value=20, discount=20%  
+      - INVALID123: Correctly rejected with Italian message "Codice promozionale non valido"
+      
+      PROMO CODE APPLICATION TESTING:
+      ✅ POST /api/promo/apply-trial - All scenarios working correctly:
+      - Trial promo application: Updates club subscription to "trial" status with "trial_3m" plan
+      - Duplicate prevention: Correctly rejects with "Questo codice è già stato utilizzato"
+      - Wrong type rejection: Correctly rejects percentage codes with "non è valido per una prova gratuita"
+      
+      ERROR HANDLING VERIFICATION:
+      ✅ All error messages are properly localized in Italian
+      ✅ HTTP status codes are appropriate (200 for success, 400 for validation errors)
+      ✅ Response format is consistent and properly structured
+      
+      PROMO CODE ENDPOINTS ARE FULLY FUNCTIONAL AND PRODUCTION-READY

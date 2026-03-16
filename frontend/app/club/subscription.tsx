@@ -32,6 +32,9 @@ export default function ClubSubscriptionScreen() {
   const [promoCode, setPromoCode] = useState('');
   const [promoApplied, setPromoApplied] = useState(false);
   const [promoDiscount, setPromoDiscount] = useState(0);
+  const [promoType, setPromoType] = useState<'percentage' | 'trial_months' | null>(null);
+  const [promoValue, setPromoValue] = useState(0);
+  const [promoMessage, setPromoMessage] = useState('');
   const [isValidatingPromo, setIsValidatingPromo] = useState(false);
 
   const plans = {
@@ -51,28 +54,15 @@ export default function ClubSubscriptionScreen() {
       if (response.valid) {
         setPromoApplied(true);
         setPromoDiscount(response.discount || 0);
-        Alert.alert('Successo', response.message || `Codice applicato! Sconto: ${response.discount}%`);
+        setPromoType(response.type || 'percentage');
+        setPromoValue(response.value || 0);
+        setPromoMessage(response.message || '');
+        Alert.alert('Successo', response.message);
       } else {
         Alert.alert('Errore', response.message || 'Codice non valido');
       }
     } catch (error: any) {
-      // For demo purposes, handle locally if API doesn't exist yet
-      const upperCode = promoCode.trim().toUpperCase();
-      if (upperCode === 'TRIAL30') {
-        setPromoApplied(true);
-        setPromoDiscount(100);
-        Alert.alert('Successo', 'Codice applicato! 30 giorni di prova gratuita');
-      } else if (upperCode === 'SCONTO20') {
-        setPromoApplied(true);
-        setPromoDiscount(20);
-        Alert.alert('Successo', 'Codice applicato! Sconto 20%');
-      } else if (upperCode === 'SCONTO50') {
-        setPromoApplied(true);
-        setPromoDiscount(50);
-        Alert.alert('Successo', 'Codice applicato! Sconto 50%');
-      } else {
-        Alert.alert('Errore', 'Codice promozionale non valido');
-      }
+      Alert.alert('Errore', error.response?.data?.message || 'Codice promozionale non valido');
     } finally {
       setIsValidatingPromo(false);
     }
@@ -82,6 +72,9 @@ export default function ClubSubscriptionScreen() {
     setPromoCode('');
     setPromoApplied(false);
     setPromoDiscount(0);
+    setPromoType(null);
+    setPromoValue(0);
+    setPromoMessage('');
   };
 
   const getDiscountedPrice = (originalPrice: number) => {
@@ -149,6 +142,25 @@ export default function ClubSubscriptionScreen() {
   }, [session_id]);
 
   const handleSubscribe = async () => {
+    // If a trial promo is applied, activate it directly
+    if (promoApplied && promoType === 'trial_months') {
+      setIsProcessing(true);
+      try {
+        const result = await apiClient.applyTrialPromo(promoCode.trim().toUpperCase());
+        if (result.success) {
+          Alert.alert('Successo', result.message);
+          await fetchClub();
+          removePromoCode();
+        }
+      } catch (error: any) {
+        Alert.alert('Errore', error.response?.data?.detail || 'Impossibile attivare la prova');
+      } finally {
+        setIsProcessing(false);
+      }
+      return;
+    }
+
+    // Otherwise proceed with Stripe checkout
     setIsProcessing(true);
     try {
       const originUrl = Platform.OS === 'web' 
@@ -291,7 +303,9 @@ export default function ClubSubscriptionScreen() {
               <View style={styles.promoAppliedBadge}>
                 <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
                 <Text style={styles.promoAppliedText}>
-                  {promoDiscount === 100 ? 'Prova gratuita attiva' : `Sconto ${promoDiscount}% applicato`}
+                  {promoType === 'trial_months' 
+                    ? `${promoValue} mesi di prova gratuita` 
+                    : `Sconto ${promoDiscount}% applicato`}
                 </Text>
               </View>
               <TouchableOpacity onPress={removePromoCode} style={styles.removePromoButton}>
@@ -322,7 +336,7 @@ export default function ClubSubscriptionScreen() {
             </View>
           )}
           <Text style={styles.promoHint}>
-            Prova: TRIAL30, SCONTO20, SCONTO50
+            Codici disponibili: TRIAL3MESI, SCONTO20, SCONTO50
           </Text>
         </Card>
 
@@ -346,7 +360,11 @@ export default function ClubSubscriptionScreen() {
 
         {/* Subscribe Button */}
         <Button
-          title={club?.subscription_status === 'active' ? 'Cambia piano' : t('subscribe')}
+          title={
+            promoApplied && promoType === 'trial_months' 
+              ? `Attiva prova ${promoValue} mesi` 
+              : (club?.subscription_status === 'active' ? 'Cambia piano' : t('subscribe'))
+          }
           onPress={handleSubscribe}
           loading={isProcessing}
           fullWidth

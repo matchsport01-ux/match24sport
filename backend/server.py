@@ -1239,6 +1239,103 @@ async def mark_all_notifications_read(user: dict = Depends(get_current_user)):
     )
     return {"message": "All notifications marked as read"}
 
+# ======================= PROMO CODE ENDPOINTS =======================
+
+class PromoCodeValidate(BaseModel):
+    code: str
+
+# Promo code types:
+# - trial_months: gives X months free trial
+# - percentage: gives X% discount
+PROMO_CODES = {
+    "TRIAL3MESI": {"type": "trial_months", "value": 3, "description": "3 mesi di prova gratuita"},
+    "SCONTO20": {"type": "percentage", "value": 20, "description": "Sconto 20%"},
+    "SCONTO50": {"type": "percentage", "value": 50, "description": "Sconto 50%"},
+    "WELCOME10": {"type": "percentage", "value": 10, "description": "Sconto di benvenuto 10%"}
+}
+
+@api_router.post("/promo/validate")
+async def validate_promo_code(data: PromoCodeValidate):
+    code = data.code.upper().strip()
+    
+    if code not in PROMO_CODES:
+        return {"valid": False, "message": "Codice promozionale non valido"}
+    
+    promo = PROMO_CODES[code]
+    
+    if promo["type"] == "trial_months":
+        return {
+            "valid": True,
+            "code": code,
+            "type": "trial_months",
+            "value": promo["value"],
+            "discount": 100,  # 100% discount for trial
+            "message": f"Codice valido! {promo['description']}"
+        }
+    elif promo["type"] == "percentage":
+        return {
+            "valid": True,
+            "code": code,
+            "type": "percentage",
+            "value": promo["value"],
+            "discount": promo["value"],
+            "message": f"Codice valido! {promo['description']}"
+        }
+    
+    return {"valid": False, "message": "Codice non valido"}
+
+@api_router.post("/promo/apply-trial")
+async def apply_trial_promo(data: PromoCodeValidate, user: dict = Depends(get_current_user)):
+    """Apply a trial promo code directly to the club subscription"""
+    code = data.code.upper().strip()
+    
+    if code not in PROMO_CODES:
+        raise HTTPException(status_code=400, detail="Codice promozionale non valido")
+    
+    promo = PROMO_CODES[code]
+    
+    if promo["type"] != "trial_months":
+        raise HTTPException(status_code=400, detail="Questo codice non è valido per una prova gratuita")
+    
+    # Get club
+    club = await db.clubs.find_one({"admin_user_id": user["user_id"]})
+    if not club:
+        raise HTTPException(status_code=403, detail="Non sei un amministratore di un circolo")
+    
+    # Check if promo was already used by this club
+    existing = await db.promo_usage.find_one({"club_id": club["club_id"], "code": code})
+    if existing:
+        raise HTTPException(status_code=400, detail="Questo codice è già stato utilizzato")
+    
+    # Apply the trial
+    trial_months = promo["value"]
+    expires_at = datetime.now(timezone.utc) + timedelta(days=trial_months * 30)
+    
+    await db.clubs.update_one(
+        {"club_id": club["club_id"]},
+        {
+            "$set": {
+                "subscription_status": "trial",
+                "subscription_plan": f"trial_{trial_months}m",
+                "subscription_expires_at": expires_at,
+                "updated_at": datetime.now(timezone.utc)
+            }
+        }
+    )
+    
+    # Record promo usage
+    await db.promo_usage.insert_one({
+        "club_id": club["club_id"],
+        "code": code,
+        "used_at": datetime.now(timezone.utc)
+    })
+    
+    return {
+        "success": True,
+        "message": f"Prova gratuita di {trial_months} mesi attivata!",
+        "expires_at": expires_at.isoformat()
+    }
+
 # ======================= SUBSCRIPTION & PAYMENT ENDPOINTS =======================
 
 @api_router.get("/subscription/plans")
