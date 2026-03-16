@@ -102,7 +102,7 @@ export function MatchCard({ match, onPress }: MatchCardProps) {
         </View>
         <Text style={styles.price}>
           {match.price_per_player > 0
-            ? `\u20AC${match.price_per_player.toFixed(2)}`
+            ? `€${match.price_per_player.toFixed(2)}`
             : t('free')}
         </Text>
       </View>

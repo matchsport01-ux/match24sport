@@ -11,12 +11,13 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { MatchCard, LoadingSpinner, EmptyState, Card } from '../../src/components';
+import { MatchCard, EmptyState, Card, MatchCardSkeleton, RatingCardSkeleton } from '../../src/components';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useLanguage } from '../../src/contexts/LanguageContext';
 import { COLORS, SPORTS } from '../../src/utils/constants';
 import { apiClient } from '../../src/api/client';
 import { Match, PlayerRating } from '../../src/types';
+import { lightHaptic } from '../../src/utils/haptics';
 
 export default function PlayerHomeScreen() {
   const router = useRouter();
@@ -58,7 +59,65 @@ export default function PlayerHomeScreen() {
   };
 
   if (isLoading) {
-    return <LoadingSpinner fullScreen message={t('loading')} />;
+    return (
+      <SafeAreaView style={styles.container}>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {/* Header skeleton */}
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.greeting}>{t('welcome')},</Text>
+              <Text style={styles.userName}>{user?.name || 'Giocatore'}</Text>
+            </View>
+          </View>
+          
+          {/* Quick actions skeleton - just show them */}
+          <View style={styles.quickActions}>
+            <TouchableOpacity
+              style={[styles.quickAction, { backgroundColor: COLORS.primary + '20' }]}
+              onPress={() => router.push('/player/search')}
+            >
+              <Ionicons name="search" size={28} color={COLORS.primary} />
+              <Text style={[styles.quickActionText, { color: COLORS.primary }]}>
+                {t('find_match')}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.quickAction, { backgroundColor: COLORS.secondary + '20' }]}
+              onPress={() => router.push('/player/my-matches')}
+            >
+              <Ionicons name="calendar" size={28} color={COLORS.secondary} />
+              <Text style={[styles.quickActionText, { color: COLORS.secondary }]}>
+                {t('my_matches')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          
+          {/* Ratings skeleton */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{t('rating')}</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.ratingsRow}>
+                {[1, 2, 3, 4].map((i) => (
+                  <RatingCardSkeleton key={i} />
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+          
+          {/* Matches skeleton */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Partite Disponibili</Text>
+            </View>
+            <MatchCardSkeleton />
+            <MatchCardSkeleton />
+            <MatchCardSkeleton />
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
   }
 
   return (

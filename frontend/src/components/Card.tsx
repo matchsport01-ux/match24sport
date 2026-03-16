@@ -2,6 +2,7 @@
 import React, { ReactNode } from 'react';
 import { View, StyleSheet, ViewStyle, TouchableOpacity } from 'react-native';
 import { COLORS } from '../utils/constants';
+import { lightHaptic } from '../utils/haptics';
 
 interface CardProps {
   children: ReactNode;
@@ -31,13 +32,20 @@ export function Card({ children, style, onPress, variant = 'default' }: CardProp
     }
   };
 
+  const handlePress = () => {
+    if (onPress) {
+      lightHaptic();
+      onPress();
+    }
+  };
+
   const content = (
     <View style={[styles.card, getCardStyle(), style]}>{children}</View>
   );
 
   if (onPress) {
     return (
-      <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+      <TouchableOpacity onPress={handlePress} activeOpacity={0.7}>
         {content}
       </TouchableOpacity>
     );

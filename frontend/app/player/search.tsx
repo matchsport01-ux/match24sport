@@ -12,11 +12,12 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { MatchCard, LoadingSpinner, EmptyState, Button } from '../../src/components';
+import { MatchCard, EmptyState, ListSkeleton } from '../../src/components';
 import { useLanguage } from '../../src/contexts/LanguageContext';
 import { COLORS, SPORTS, SKILL_LEVELS } from '../../src/utils/constants';
 import { apiClient } from '../../src/api/client';
 import { Match } from '../../src/types';
+import { selectionHaptic, lightHaptic } from '../../src/utils/haptics';
 
 export default function PlayerSearchScreen() {
   const router = useRouter();
@@ -154,9 +155,10 @@ export default function PlayerSearchScreen() {
                         backgroundColor: sport.color,
                       },
                     ]}
-                    onPress={() =>
-                      setSelectedSport(selectedSport === sport.id ? null : sport.id)
-                    }
+                    onPress={() => {
+                      selectionHaptic();
+                      setSelectedSport(selectedSport === sport.id ? null : sport.id);
+                    }}
                   >
                     <Ionicons
                       name={sport.id === 'calcetto' ? 'football-outline' : 'tennisball-outline'}
@@ -188,9 +190,10 @@ export default function PlayerSearchScreen() {
                       styles.filterChip,
                       selectedLevel === level.id && styles.filterChipActive,
                     ]}
-                    onPress={() =>
-                      setSelectedLevel(selectedLevel === level.id ? null : level.id)
-                    }
+                    onPress={() => {
+                      selectionHaptic();
+                      setSelectedLevel(selectedLevel === level.id ? null : level.id);
+                    }}
                   >
                     <Text
                       style={[
@@ -217,7 +220,9 @@ export default function PlayerSearchScreen() {
 
       {/* Results */}
       {isLoading ? (
-        <LoadingSpinner message={t('loading')} />
+        <View style={styles.scrollContent}>
+          <ListSkeleton count={4} />
+        </View>
       ) : (
         <ScrollView
           contentContainerStyle={styles.scrollContent}

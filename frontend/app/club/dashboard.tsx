@@ -11,13 +11,14 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, LoadingSpinner } from '../../src/components';
+import { Card, DashboardSkeleton } from '../../src/components';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useLanguage } from '../../src/contexts/LanguageContext';
 import { COLORS } from '../../src/utils/constants';
 import { apiClient } from '../../src/api/client';
 import { Club } from '../../src/types';
 import { format, parseISO } from 'date-fns';
+import { lightHaptic } from '../../src/utils/haptics';
 
 export default function ClubDashboardScreen() {
   const router = useRouter();
@@ -72,7 +73,19 @@ export default function ClubDashboardScreen() {
   };
 
   if (isLoading) {
-    return <LoadingSpinner fullScreen message={t('loading')} />;
+    return (
+      <SafeAreaView style={styles.container}>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.greeting}>{t('dashboard')}</Text>
+              <Text style={styles.clubName}>Caricamento...</Text>
+            </View>
+          </View>
+          <DashboardSkeleton />
+        </ScrollView>
+      </SafeAreaView>
+    );
   }
 
   if (!dashboardData) {

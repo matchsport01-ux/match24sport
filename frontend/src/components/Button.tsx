@@ -9,6 +9,7 @@ import {
   TextStyle,
 } from 'react-native';
 import { COLORS } from '../utils/constants';
+import { mediumHaptic } from '../utils/haptics';
 
 interface ButtonProps {
   title: string;
@@ -21,6 +22,7 @@ interface ButtonProps {
   style?: ViewStyle;
   textStyle?: TextStyle;
   fullWidth?: boolean;
+  haptic?: boolean;
 }
 
 export function Button({
@@ -34,7 +36,14 @@ export function Button({
   style,
   textStyle,
   fullWidth = false,
+  haptic = true,
 }: ButtonProps) {
+  const handlePress = () => {
+    if (haptic && !disabled && !loading) {
+      mediumHaptic();
+    }
+    onPress();
+  };
   const getBackgroundColor = () => {
     if (disabled) return COLORS.surfaceLight;
     switch (variant) {
@@ -89,7 +98,7 @@ export function Button({
 
   return (
     <TouchableOpacity
-      onPress={onPress}
+      onPress={handlePress}
       disabled={disabled || loading}
       activeOpacity={0.7}
       style={[
