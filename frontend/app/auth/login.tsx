@@ -9,7 +9,6 @@ import {
   Platform,
   ScrollView,
   Alert,
-  Linking,
   Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -44,18 +43,6 @@ export default function LoginScreen() {
     }
   };
 
-  const handleGoogleLogin = () => {
-    // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-    if (Platform.OS === 'web') {
-      const redirectUrl = window.location.origin + '/auth/callback';
-      window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
-    } else {
-      // For mobile, use Linking
-      const redirectUrl = 'https://padel-finder-app.preview.emergentagent.com/auth/callback';
-      Linking.openURL(`https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`);
-    }
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -77,7 +64,7 @@ export default function LoginScreen() {
           <View style={styles.header}>
             <View style={styles.logoContainer}>
               <Image
-                source={{ uri: 'https://customer-assets.emergentagent.com/job_padel-finder-app/artifacts/8etm8mej_logo.svg' }}
+                source={{ uri: 'https://customer-assets.emergentagent.com/job_padel-finder-app/artifacts/di415713_atch%20%281%29.png' }}
                 style={styles.logoImage}
                 resizeMode="contain"
               />
@@ -122,20 +109,6 @@ export default function LoginScreen() {
               size="large"
             />
 
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>{t('or')}</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <Button
-              title={t('login_with_google')}
-              onPress={handleGoogleLogin}
-              variant="outline"
-              fullWidth
-              size="large"
-              icon={<Ionicons name="logo-google" size={20} color={COLORS.primary} />}
-            />
           </View>
 
           <View style={styles.footer}>

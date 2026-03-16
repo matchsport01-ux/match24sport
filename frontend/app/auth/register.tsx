@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -51,17 +50,6 @@ export default function RegisterScreen() {
       router.replace('/player/onboarding');
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Errore durante la registrazione');
-    }
-  };
-
-  const handleGoogleRegister = () => {
-    // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-    if (Platform.OS === 'web') {
-      const redirectUrl = window.location.origin + '/auth/callback';
-      window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
-    } else {
-      const redirectUrl = 'https://padel-finder-app.preview.emergentagent.com/auth/callback';
-      Linking.openURL(`https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`);
     }
   };
 
@@ -142,21 +130,6 @@ export default function RegisterScreen() {
               loading={isLoading}
               fullWidth
               size="large"
-            />
-
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>{t('or')}</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <Button
-              title={t('login_with_google')}
-              onPress={handleGoogleRegister}
-              variant="outline"
-              fullWidth
-              size="large"
-              icon={<Ionicons name="logo-google" size={20} color={COLORS.primary} />}
             />
           </View>
 
