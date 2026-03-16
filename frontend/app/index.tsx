@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, Image, Dimensions, Platform } from 'react-nativ
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Button } from '../src/components';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useLanguage } from '../src/contexts/LanguageContext';
@@ -17,6 +18,24 @@ export default function Index() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { t } = useLanguage();
   const [forceShow, setForceShow] = useState(false);
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
+
+  // Check onboarding status
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      try {
+        const completed = await AsyncStorage.getItem('onboarding_completed');
+        if (!completed && !isAuthenticated) {
+          router.replace('/onboarding');
+          return;
+        }
+      } catch (error) {
+        console.error('Error checking onboarding:', error);
+      }
+      setCheckingOnboarding(false);
+    };
+    checkOnboarding();
+  }, [isAuthenticated]);
 
   // Force show content after 3 seconds to prevent infinite loading
   useEffect(() => {
@@ -26,7 +45,7 @@ export default function Index() {
     return () => clearTimeout(timer);
   }, []);
 
-  const isLoading = authLoading && !forceShow;
+  const isLoading = (authLoading || checkingOnboarding) && !forceShow;
 
   useEffect(() => {
     // Check URL for session_id (Google OAuth callback)
