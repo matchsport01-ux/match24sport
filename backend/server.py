@@ -54,12 +54,13 @@ logger = logging.getLogger(__name__)
 # ======================= MODELS =======================
 
 # Sports enum
-SPORTS = ["padel", "tennis", "calcetto"]
+SPORTS = ["padel", "tennis", "calcetto", "calcio8"]
 MATCH_FORMATS = {
     "padel": {"min_players": 4, "max_players": 4},
     "tennis_singles": {"min_players": 2, "max_players": 2},
     "tennis_doubles": {"min_players": 4, "max_players": 4},
-    "calcetto": {"min_players": 10, "max_players": 12}
+    "calcetto": {"min_players": 10, "max_players": 12},
+    "calcio8": {"min_players": 16, "max_players": 18}
 }
 
 # User roles
@@ -287,7 +288,7 @@ async def register(user_data: UserCreate):
             "preferred_sports": [],
             "bio": "",
             "profile_picture": None,
-            "skill_levels": {"padel": "beginner", "tennis": "beginner", "calcetto": "beginner"},
+            "skill_levels": {"padel": "beginner", "tennis": "beginner", "calcetto": "beginner", "calcio8": "beginner"},
             "created_at": datetime.now(timezone.utc)
         }
         await db.player_profiles.insert_one(player_profile)

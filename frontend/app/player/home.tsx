@@ -128,7 +128,7 @@ export default function PlayerHomeScreen() {
                   <Card key={sport.id} style={[styles.ratingCard, { borderColor: sport.color }]}>
                     <View style={[styles.sportIconContainer, { backgroundColor: sport.color + '20' }]}>
                       <Ionicons
-                        name={sport.id === 'calcetto' ? 'football-outline' : 'tennisball-outline'}
+                        name={sport.id === 'calcetto' || sport.id === 'calcio8' ? 'football-outline' : 'tennisball-outline'}
                         size={24}
                         color={sport.color}
                       />

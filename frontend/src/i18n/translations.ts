@@ -54,6 +54,7 @@ export const translations: Record<Language, Record<string, string>> = {
     padel: 'Padel',
     tennis: 'Tennis',
     calcetto: 'Calcetto',
+    calcio8: 'Calcio a 8',
     sport: 'Sport',
     sports: 'Sport',
     
@@ -200,6 +201,7 @@ export const translations: Record<Language, Record<string, string>> = {
     padel: 'Padel',
     tennis: 'Tennis',
     calcetto: 'Futsal',
+    calcio8: '8-a-side Football',
     sport: 'Sport',
     sports: 'Sports',
     
@@ -346,6 +348,7 @@ export const translations: Record<Language, Record<string, string>> = {
     padel: 'Pádel',
     tennis: 'Tenis',
     calcetto: 'Fútbol sala',
+    calcio8: 'Fútbol 8',
     sport: 'Deporte',
     sports: 'Deportes',
     
@@ -492,6 +495,7 @@ export const translations: Record<Language, Record<string, string>> = {
     padel: 'Padel',
     tennis: 'Tennis',
     calcetto: 'Futsal',
+    calcio8: 'Football à 8',
     sport: 'Sport',
     sports: 'Sports',
     

@@ -23,6 +23,7 @@ export interface PlayerProfile {
     padel: string;
     tennis: string;
     calcetto: string;
+    calcio8: string;
   };
 }
 

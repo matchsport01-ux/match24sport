@@ -29,6 +29,7 @@ export function SportBadge({ sport, size = 'medium', showLabel = true }: SportBa
   const getIcon = (): keyof typeof Ionicons.glyphMap => {
     switch (sport) {
       case 'calcetto':
+      case 'calcio8':
         return 'football-outline';
       case 'tennis':
       case 'padel':

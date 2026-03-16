@@ -28,12 +28,14 @@ export const COLORS = {
   padel: '#10B981',
   tennis: '#F59E0B',
   calcetto: '#3B82F6',
+  calcio8: '#8B5CF6',  // Purple for Calcio a 8
 };
 
 export const SPORTS = [
   { id: 'padel', name: 'Padel', icon: 'tennisball', color: COLORS.padel },
   { id: 'tennis', name: 'Tennis', icon: 'tennisball', color: COLORS.tennis },
   { id: 'calcetto', name: 'Calcetto', icon: 'football', color: COLORS.calcetto },
+  { id: 'calcio8', name: 'Calcio a 8', icon: 'football', color: COLORS.calcio8 },
 ];
 
 export const SKILL_LEVELS = [
@@ -48,6 +50,7 @@ export const MATCH_FORMATS = {
   tennis_singles: { minPlayers: 2, maxPlayers: 2 },
   tennis_doubles: { minPlayers: 4, maxPlayers: 4 },
   calcetto: { minPlayers: 10, maxPlayers: 12 },
+  calcio8: { minPlayers: 16, maxPlayers: 18 },
 };
 
 export const SUBSCRIPTION_PLANS = {

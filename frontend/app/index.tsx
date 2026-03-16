@@ -58,9 +58,11 @@ export default function Index() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.logoContainer}>
-          <View style={styles.logoIcon}>
-            <Ionicons name="tennisball" size={40} color={COLORS.primary} />
-          </View>
+          <Image
+            source={{ uri: 'https://customer-assets.emergentagent.com/job_padel-finder-app/artifacts/k6auyx1d_atch.svg' }}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
           <Text style={styles.logoText}>Match Sport 24</Text>
         </View>
       </View>
@@ -68,14 +70,14 @@ export default function Index() {
       <View style={styles.heroSection}>
         <Text style={styles.heroTitle}>{t('welcome')}</Text>
         <Text style={styles.heroSubtitle}>
-          Trova e prenota partite di Padel, Tennis e Calcetto nella tua città
+          Trova e prenota partite di Padel, Tennis, Calcetto e Calcio a 8 nella tua città
         </Text>
 
         <View style={styles.sportsRow}>
           {SPORTS.map((sport) => (
             <View key={sport.id} style={[styles.sportItem, { backgroundColor: sport.color + '20' }]}>
               <Ionicons
-                name={sport.id === 'calcetto' ? 'football-outline' : 'tennisball-outline'}
+                name={sport.id === 'calcetto' || sport.id === 'calcio8' ? 'football-outline' : 'tennisball-outline'}
                 size={24}
                 color={sport.color}
               />
@@ -159,6 +161,11 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 12,
+  },
+  logoImage: {
+    width: 56,
+    height: 56,
     marginRight: 12,
   },
   logoText: {
