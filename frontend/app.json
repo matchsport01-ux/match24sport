@@ -1,43 +1,81 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "Match Sport 24",
+    "slug": "match-sport-24",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
-    "userInterfaceStyle": "automatic",
+    "icon": "./assets/images/app-icon.png",
+    "scheme": "matchsport24",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.matchsport24.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Per scattare foto del tuo profilo",
+        "NSPhotoLibraryUsageDescription": "Per scegliere foto dalla galleria",
+        "CFBundleAllowMixedLocalizations": true
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000"
+        "foregroundImage": "./assets/images/app-icon.png",
+        "backgroundColor": "#000000"
       },
+      "package": "com.matchsport24.app",
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
       "edgeToEdgeEnabled": true
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/app-icon.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/app-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#000"
+          "backgroundColor": "#000000"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permetti a Match Sport 24 di accedere alle tue foto",
+          "cameraPermission": "Permetti a Match Sport 24 di accedere alla fotocamera"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "locales": {
+      "it": "./locales/it.json",
+      "en": "./locales/en.json",
+      "es": "./locales/es.json",
+      "fr": "./locales/fr.json"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "match-sport-24"
+      }
+    },
+    "owner": "matchsport24",
+    "primaryColor": "#10B981",
+    "backgroundColor": "#0F172A"
   }
 }
