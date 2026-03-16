@@ -335,9 +335,6 @@ export default function ClubSubscriptionScreen() {
               </TouchableOpacity>
             </View>
           )}
-          <Text style={styles.promoHint}>
-            Codici disponibili: TRIAL3MESI, SCONTO20, SCONTO50
-          </Text>
         </Card>
 
         {/* Features */}
