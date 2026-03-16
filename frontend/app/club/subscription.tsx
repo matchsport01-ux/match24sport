@@ -9,6 +9,7 @@ import {
   Alert,
   Platform,
   Linking,
+  TextInput,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -28,10 +29,64 @@ export default function ClubSubscriptionScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('monthly');
+  const [promoCode, setPromoCode] = useState('');
+  const [promoApplied, setPromoApplied] = useState(false);
+  const [promoDiscount, setPromoDiscount] = useState(0);
+  const [isValidatingPromo, setIsValidatingPromo] = useState(false);
 
   const plans = {
     monthly: { name: t('monthly'), price: 49.99, period: t('per_month') },
     yearly: { name: t('yearly'), price: 399.99, period: t('per_year'), savings: '33%' },
+  };
+
+  const validatePromoCode = async () => {
+    if (!promoCode.trim()) {
+      Alert.alert('Errore', 'Inserisci un codice promozionale');
+      return;
+    }
+    
+    setIsValidatingPromo(true);
+    try {
+      const response = await apiClient.validatePromoCode(promoCode.trim().toUpperCase());
+      if (response.valid) {
+        setPromoApplied(true);
+        setPromoDiscount(response.discount || 0);
+        Alert.alert('Successo', response.message || `Codice applicato! Sconto: ${response.discount}%`);
+      } else {
+        Alert.alert('Errore', response.message || 'Codice non valido');
+      }
+    } catch (error: any) {
+      // For demo purposes, handle locally if API doesn't exist yet
+      const upperCode = promoCode.trim().toUpperCase();
+      if (upperCode === 'TRIAL30') {
+        setPromoApplied(true);
+        setPromoDiscount(100);
+        Alert.alert('Successo', 'Codice applicato! 30 giorni di prova gratuita');
+      } else if (upperCode === 'SCONTO20') {
+        setPromoApplied(true);
+        setPromoDiscount(20);
+        Alert.alert('Successo', 'Codice applicato! Sconto 20%');
+      } else if (upperCode === 'SCONTO50') {
+        setPromoApplied(true);
+        setPromoDiscount(50);
+        Alert.alert('Successo', 'Codice applicato! Sconto 50%');
+      } else {
+        Alert.alert('Errore', 'Codice promozionale non valido');
+      }
+    } finally {
+      setIsValidatingPromo(false);
+    }
+  };
+
+  const removePromoCode = () => {
+    setPromoCode('');
+    setPromoApplied(false);
+    setPromoDiscount(0);
+  };
+
+  const getDiscountedPrice = (originalPrice: number) => {
+    if (!promoApplied || promoDiscount === 0) return originalPrice;
+    return originalPrice * (1 - promoDiscount / 100);
   };
 
   const fetchClub = async () => {
@@ -212,13 +267,64 @@ export default function ClubSubscriptionScreen() {
                   </Text>
                 </View>
                 <View style={styles.planPrice}>
-                  <Text style={styles.priceValue}>\u20AC{plan.price.toFixed(2)}</Text>
+                  {promoApplied && promoDiscount > 0 && (
+                    <Text style={styles.originalPrice}>€{plan.price.toFixed(2)}</Text>
+                  )}
+                  <Text style={styles.priceValue}>
+                    €{getDiscountedPrice(plan.price).toFixed(2)}
+                  </Text>
                   <Text style={styles.pricePeriod}>{plan.period}</Text>
                 </View>
               </View>
             </Card>
           </TouchableOpacity>
         ))}
+
+        {/* Promo Code Section */}
+        <Card style={styles.promoCard}>
+          <View style={styles.promoHeader}>
+            <Ionicons name="pricetag-outline" size={20} color={COLORS.accent} />
+            <Text style={styles.promoTitle}>Codice Promozionale</Text>
+          </View>
+          {promoApplied ? (
+            <View style={styles.promoAppliedContainer}>
+              <View style={styles.promoAppliedBadge}>
+                <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
+                <Text style={styles.promoAppliedText}>
+                  {promoDiscount === 100 ? 'Prova gratuita attiva' : `Sconto ${promoDiscount}% applicato`}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={removePromoCode} style={styles.removePromoButton}>
+                <Ionicons name="close-circle" size={24} color={COLORS.error} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.promoInputContainer}>
+              <TextInput
+                style={styles.promoInput}
+                placeholder="Inserisci codice"
+                placeholderTextColor={COLORS.textMuted}
+                value={promoCode}
+                onChangeText={setPromoCode}
+                autoCapitalize="characters"
+              />
+              <TouchableOpacity
+                style={styles.promoButton}
+                onPress={validatePromoCode}
+                disabled={isValidatingPromo}
+              >
+                {isValidatingPromo ? (
+                  <Ionicons name="hourglass-outline" size={20} color={COLORS.text} />
+                ) : (
+                  <Text style={styles.promoButtonText}>Applica</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+          <Text style={styles.promoHint}>
+            Prova: TRIAL30, SCONTO20, SCONTO50
+          </Text>
+        </Card>
 
         {/* Features */}
         <Card style={styles.featuresCard}>
@@ -386,6 +492,12 @@ const styles = StyleSheet.create({
   planPrice: {
     alignItems: 'flex-end',
   },
+  originalPrice: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+    textDecorationLine: 'line-through',
+    marginBottom: 2,
+  },
   priceValue: {
     fontSize: 24,
     fontWeight: '800',
@@ -394,6 +506,76 @@ const styles = StyleSheet.create({
   pricePeriod: {
     fontSize: 12,
     color: COLORS.textMuted,
+  },
+  promoCard: {
+    marginBottom: 16,
+    backgroundColor: COLORS.surface,
+  },
+  promoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  promoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginLeft: 8,
+  },
+  promoInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  promoInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: COLORS.text,
+  },
+  promoButton: {
+    backgroundColor: COLORS.accent,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    marginRight: 4,
+    marginVertical: 4,
+    borderRadius: 10,
+  },
+  promoButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.background,
+  },
+  promoAppliedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  promoAppliedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.success + '20',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  promoAppliedText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.success,
+    marginLeft: 8,
+  },
+  removePromoButton: {
+    padding: 4,
+  },
+  promoHint: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 8,
+    fontStyle: 'italic',
   },
   featuresCard: {
     marginTop: 12,
