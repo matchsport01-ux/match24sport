@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.matchsport24.app",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "infoPlist": {
         "NSCameraUsageDescription": "Per scattare foto del tuo profilo",
         "NSPhotoLibraryUsageDescription": "Per scegliere foto dalla galleria",
@@ -27,7 +27,7 @@
         "backgroundColor": "#000000"
       },
       "package": "com.matchsport24.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
