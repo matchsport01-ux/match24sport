@@ -24,6 +24,7 @@ export default function AddCourtScreen() {
 
   const [name, setName] = useState('');
   const [selectedSport, setSelectedSport] = useState('padel');
+  const [isIndoor, setIsIndoor] = useState(false);
   const [notes, setNotes] = useState('');
   const [selectedHours, setSelectedHours] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -60,6 +61,7 @@ export default function AddCourtScreen() {
       await apiClient.createCourt({
         name,
         sport: selectedSport,
+        is_indoor: isIndoor,
         available_hours: selectedHours,
         notes: notes || undefined,
       });
@@ -131,6 +133,45 @@ export default function AddCourtScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
+            </View>
+          </View>
+
+          {/* Indoor/Outdoor Selection */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Tipo Campo *</Text>
+            <View style={styles.indoorRow}>
+              <TouchableOpacity
+                style={[
+                  styles.indoorOption,
+                  !isIndoor && styles.indoorOptionSelected,
+                ]}
+                onPress={() => setIsIndoor(false)}
+              >
+                <Ionicons
+                  name="sunny-outline"
+                  size={24}
+                  color={!isIndoor ? COLORS.accent : COLORS.textMuted}
+                />
+                <Text style={[styles.indoorText, !isIndoor && styles.indoorTextSelected]}>
+                  Outdoor
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.indoorOption,
+                  isIndoor && styles.indoorOptionSelected,
+                ]}
+                onPress={() => setIsIndoor(true)}
+              >
+                <Ionicons
+                  name="home-outline"
+                  size={24}
+                  color={isIndoor ? COLORS.secondary : COLORS.textMuted}
+                />
+                <Text style={[styles.indoorText, isIndoor && styles.indoorTextSelected]}>
+                  Indoor
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -260,6 +301,34 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.textMuted,
     marginTop: 8,
+  },
+  indoorRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  indoorOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  indoorOptionSelected: {
+    borderColor: COLORS.secondary,
+    backgroundColor: COLORS.secondary + '20',
+  },
+  indoorText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+  },
+  indoorTextSelected: {
+    color: COLORS.text,
   },
   hoursGrid: {
     flexDirection: 'row',

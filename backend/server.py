@@ -687,6 +687,58 @@ async def delete_court(court_id: str, user: dict = Depends(get_current_user)):
     
     return {"message": "Court deactivated"}
 
+# ======================= FAVORITE CLUBS ENDPOINTS =======================
+
+@api_router.get("/player/favorite-clubs")
+async def get_favorite_clubs(user: dict = Depends(get_current_user)):
+    """Get player's favorite clubs"""
+    favorites = await db.favorite_clubs.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(100)
+    club_ids = [f["club_id"] for f in favorites]
+    
+    if not club_ids:
+        return []
+    
+    clubs = await db.clubs.find({"club_id": {"$in": club_ids}}, {"_id": 0}).to_list(100)
+    return clubs
+
+@api_router.post("/player/favorite-clubs/{club_id}")
+async def add_favorite_club(club_id: str, user: dict = Depends(get_current_user)):
+    """Add a club to favorites"""
+    # Check if club exists
+    club = await db.clubs.find_one({"club_id": club_id})
+    if not club:
+        raise HTTPException(status_code=404, detail="Club not found")
+    
+    # Check if already in favorites
+    existing = await db.favorite_clubs.find_one({"user_id": user["user_id"], "club_id": club_id})
+    if existing:
+        return {"message": "Already in favorites", "is_favorite": True}
+    
+    # Add to favorites
+    await db.favorite_clubs.insert_one({
+        "user_id": user["user_id"],
+        "club_id": club_id,
+        "created_at": datetime.now(timezone.utc)
+    })
+    
+    return {"message": "Added to favorites", "is_favorite": True}
+
+@api_router.delete("/player/favorite-clubs/{club_id}")
+async def remove_favorite_club(club_id: str, user: dict = Depends(get_current_user)):
+    """Remove a club from favorites"""
+    result = await db.favorite_clubs.delete_one({"user_id": user["user_id"], "club_id": club_id})
+    
+    if result.deleted_count == 0:
+        return {"message": "Not in favorites", "is_favorite": False}
+    
+    return {"message": "Removed from favorites", "is_favorite": False}
+
+@api_router.get("/player/favorite-clubs/{club_id}/status")
+async def check_favorite_status(club_id: str, user: dict = Depends(get_current_user)):
+    """Check if a club is in favorites"""
+    existing = await db.favorite_clubs.find_one({"user_id": user["user_id"], "club_id": club_id})
+    return {"is_favorite": existing is not None}
+
 # ======================= MATCH ENDPOINTS =======================
 
 @api_router.post("/matches")

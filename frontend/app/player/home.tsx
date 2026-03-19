@@ -169,6 +169,15 @@ export default function PlayerHomeScreen() {
               {t('my_matches')}
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.quickAction, { backgroundColor: COLORS.error + '20' }]}
+            onPress={() => router.push('/player/favorites')}
+          >
+            <Ionicons name="heart" size={28} color={COLORS.error} />
+            <Text style={[styles.quickActionText, { color: COLORS.error }]}>
+              Preferiti
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Ratings Section */}
@@ -276,19 +285,21 @@ const styles = StyleSheet.create({
   },
   quickActions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
     marginBottom: 24,
   },
   quickAction: {
     flex: 1,
-    padding: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 8,
     borderRadius: 16,
     alignItems: 'center',
   },
   quickActionText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     marginTop: 8,
+    textAlign: 'center',
   },
   section: {
     marginBottom: 24,

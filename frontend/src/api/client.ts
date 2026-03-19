@@ -309,6 +309,27 @@ class APIClient {
     return response.data;
   }
 
+  // Favorite Clubs
+  async getFavoriteClubs() {
+    const response = await this.client.get('/player/favorite-clubs');
+    return response.data;
+  }
+
+  async addFavoriteClub(clubId: string) {
+    const response = await this.client.post(`/player/favorite-clubs/${clubId}`);
+    return response.data;
+  }
+
+  async removeFavoriteClub(clubId: string) {
+    const response = await this.client.delete(`/player/favorite-clubs/${clubId}`);
+    return response.data;
+  }
+
+  async checkFavoriteStatus(clubId: string) {
+    const response = await this.client.get(`/player/favorite-clubs/${clubId}/status`);
+    return response.data;
+  }
+
   // Utility
   async getCities() {
     const response = await this.client.get('/cities');

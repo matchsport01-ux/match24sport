@@ -98,7 +98,25 @@ export default function ClubCourtsScreen() {
               <View style={styles.courtHeader}>
                 <View style={styles.courtInfo}>
                   <Text style={styles.courtName}>{court.name}</Text>
-                  <SportBadge sport={court.sport} size="small" />
+                  <View style={styles.courtBadges}>
+                    <SportBadge sport={court.sport} size="small" />
+                    <View style={[
+                      styles.indoorBadge,
+                      { backgroundColor: court.is_indoor ? COLORS.secondary + '20' : COLORS.accent + '20' }
+                    ]}>
+                      <Ionicons 
+                        name={court.is_indoor ? 'home' : 'sunny'} 
+                        size={12} 
+                        color={court.is_indoor ? COLORS.secondary : COLORS.accent} 
+                      />
+                      <Text style={[
+                        styles.indoorBadgeText,
+                        { color: court.is_indoor ? COLORS.secondary : COLORS.accent }
+                      ]}>
+                        {court.is_indoor ? 'Indoor' : 'Outdoor'}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
                 <View style={[
                   styles.activeBadge,
@@ -210,6 +228,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.text,
     marginBottom: 8,
+  },
+  courtBadges: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  indoorBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  indoorBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   activeBadge: {
     paddingHorizontal: 10,
