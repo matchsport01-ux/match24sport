@@ -83,6 +83,12 @@ export default function PlayerLayout() {
           href: null,
         }}
       />
+      <Tabs.Screen
+        name="favorites"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

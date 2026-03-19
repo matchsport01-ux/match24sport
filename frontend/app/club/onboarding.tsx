@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Input } from '../../src/components';
+import { useAuth } from '../../src/contexts/AuthContext';
 import { useLanguage } from '../../src/contexts/LanguageContext';
 import { COLORS } from '../../src/utils/constants';
 import { apiClient } from '../../src/api/client';
@@ -21,6 +22,7 @@ import { apiClient } from '../../src/api/client';
 export default function ClubOnboardingScreen() {
   const router = useRouter();
   const { t } = useLanguage();
+  const { refreshUser } = useAuth();
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -46,7 +48,15 @@ export default function ClubOnboardingScreen() {
         phone,
         email: email || undefined,
       });
-      router.replace('/club/dashboard');
+      
+      // Refresh user data to update role
+      if (refreshUser) {
+        await refreshUser();
+      }
+      
+      Alert.alert('Successo', 'Circolo registrato con successo! Hai 3 mesi di prova gratuita.', [
+        { text: 'OK', onPress: () => router.replace('/club/dashboard') }
+      ]);
     } catch (error: any) {
       Alert.alert('Errore', error.response?.data?.detail || 'Impossibile registrare il circolo');
     } finally {
@@ -142,7 +152,7 @@ export default function ClubOnboardingScreen() {
           <View style={styles.infoBox}>
             <Ionicons name="gift-outline" size={24} color={COLORS.success} />
             <Text style={styles.infoText}>
-              Inizia con 14 giorni di prova gratuita. Potrai gestire i tuoi campi e ricevere prenotazioni da subito!
+              Inizia con 3 mesi di prova gratuita! Potrai gestire i tuoi campi e ricevere prenotazioni da subito!
             </Text>
           </View>
         </ScrollView>

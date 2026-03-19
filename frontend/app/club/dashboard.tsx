@@ -29,13 +29,30 @@ export default function ClubDashboardScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const [retryCount, setRetryCount] = useState(0);
+
   const fetchDashboard = async () => {
     try {
       const data = await apiClient.getClubDashboard();
       setDashboardData(data);
     } catch (error: any) {
       if (error.response?.status === 403) {
-        // Not a club admin, redirect to onboarding
+        // First try to get club info directly
+        try {
+          const club = await apiClient.getMyClub();
+          if (club) {
+            // Club exists, retry dashboard
+            if (retryCount < 3) {
+              setRetryCount(prev => prev + 1);
+              setTimeout(fetchDashboard, 1000);
+              return;
+            }
+          }
+        } catch {
+          // No club, redirect to onboarding
+          router.replace('/club/onboarding');
+          return;
+        }
         router.replace('/club/onboarding');
       }
       console.error('Error fetching dashboard:', error);

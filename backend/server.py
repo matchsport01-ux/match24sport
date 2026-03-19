@@ -546,8 +546,8 @@ async def register_club(club_data: ClubCreate, user: dict = Depends(get_current_
         **club_data.dict(),
         "is_active": True,
         "subscription_status": "trial",
-        "subscription_plan": None,
-        "subscription_expires_at": datetime.now(timezone.utc) + timedelta(days=14),  # 14-day trial
+        "subscription_plan": "trial_3m",
+        "subscription_expires_at": datetime.now(timezone.utc) + timedelta(days=90),  # 3-month trial
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc)
     }
@@ -959,6 +959,7 @@ async def get_club_matches(
 
 @api_router.get("/club/dashboard")
 async def get_club_dashboard(user: dict = Depends(get_current_user)):
+    # Search for club by admin_user_id regardless of user role
     club = await db.clubs.find_one({"admin_user_id": user["user_id"]}, {"_id": 0})
     if not club:
         raise HTTPException(status_code=403, detail="Not a club admin")
