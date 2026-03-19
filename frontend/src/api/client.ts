@@ -2,8 +2,32 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+// Get backend URL with multiple fallbacks for production reliability
+const getBackendUrl = (): string => {
+  // First try environment variable (set during build)
+  const envUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
+  if (envUrl && envUrl.trim() !== '') {
+    console.log('[APIClient] Using EXPO_PUBLIC_BACKEND_URL:', envUrl);
+    return envUrl;
+  }
+  
+  // Fallback to app.json extra config
+  const extraUrl = Constants.expoConfig?.extra?.backendUrl;
+  if (extraUrl && extraUrl.trim() !== '') {
+    console.log('[APIClient] Using app.json extra.backendUrl:', extraUrl);
+    return extraUrl;
+  }
+  
+  // Hardcoded fallback as last resort for production builds
+  const fallbackUrl = 'https://padel-finder-app.preview.emergentagent.com';
+  console.log('[APIClient] Using hardcoded fallback URL:', fallbackUrl);
+  return fallbackUrl;
+};
+
+const API_BASE_URL = getBackendUrl();
+console.log('[APIClient] Final API_BASE_URL:', API_BASE_URL);
 
 class APIClient {
   private client: AxiosInstance;

@@ -46,10 +46,17 @@ export default function RegisterScreen() {
 
     try {
       setError('');
+      console.log('[Register] Starting registration for:', email);
       await register(email, password, name, 'player');
+      console.log('[Register] Registration successful, redirecting to onboarding');
       router.replace('/player/onboarding');
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Errore durante la registrazione');
+      console.error('[Register] Registration failed:', err?.message || err);
+      console.error('[Register] Error response:', JSON.stringify(err?.response?.data));
+      const errorMessage = err.response?.data?.detail || 
+                          err.message || 
+                          'Errore durante la registrazione. Verifica la connessione.';
+      setError(errorMessage);
     }
   };
 

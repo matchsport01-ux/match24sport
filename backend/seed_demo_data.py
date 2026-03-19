@@ -314,6 +314,42 @@ async def create_super_admin():
     await db.users.insert_one(admin)
     print("✅ Super admin created (email: admin@matchsport24.com, password: Admin123!)")
 
+async def create_apple_reviewer():
+    """Create Apple App Store reviewer account"""
+    print("🍎 Creating Apple Reviewer account...")
+    
+    existing = await db.users.find_one({"email": "reviewer@apple.com"})
+    if existing:
+        print("✅ Apple Reviewer account already exists")
+        return
+    
+    reviewer = {
+        "user_id": generate_id("user"),
+        "email": "reviewer@apple.com",
+        "password_hash": pwd_context.hash("AppleReview2024!"),
+        "name": "Apple Reviewer",
+        "role": "player",
+        "is_active": True,
+        "language": "it",
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+    await db.users.insert_one(reviewer)
+    
+    # Create player profile for reviewer
+    profile = {
+        "user_id": reviewer["user_id"],
+        "bio": "Apple App Store Reviewer",
+        "city": "Roma",
+        "preferred_sports": ["padel", "tennis"],
+        "skill_level": "intermediate",
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+    await db.player_profiles.insert_one(profile)
+    
+    print("✅ Apple Reviewer created (email: reviewer@apple.com, password: AppleReview2024!)")
+
 async def main():
     print("=" * 50)
     print("🚀 Match Sport 24 - Demo Data Seeder")
@@ -327,6 +363,7 @@ async def main():
     clubs = await create_demo_clubs(8)
     await create_demo_matches(clubs, players, 20)
     await create_super_admin()
+    await create_apple_reviewer()
     
     print("=" * 50)
     print("✅ Demo data seeding complete!")
@@ -335,6 +372,7 @@ async def main():
     print("   Player: demo.player1@matchsport24.test / Demo123!")
     print("   Club:   club1@matchsport24.test / Demo123!")
     print("   Admin:  admin@matchsport24.com / Admin123!")
+    print("   🍎 Apple Reviewer: reviewer@apple.com / AppleReview2024!")
     print("")
 
 if __name__ == "__main__":

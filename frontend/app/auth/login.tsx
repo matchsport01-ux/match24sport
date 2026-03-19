@@ -36,10 +36,17 @@ export default function LoginScreen() {
 
     try {
       setError('');
+      console.log('[Login] Attempting login for:', email);
       await login(email, password);
+      console.log('[Login] Login successful');
       // Navigation will be handled by auth context
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Credenziali non valide');
+      console.error('[Login] Login failed:', err?.message || err);
+      console.error('[Login] Error response:', JSON.stringify(err?.response?.data));
+      const errorMessage = err.response?.data?.detail || 
+                          err.message || 
+                          'Errore di connessione. Riprova.';
+      setError(errorMessage);
     }
   };
 
