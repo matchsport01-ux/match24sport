@@ -338,9 +338,9 @@ frontend:
 
   - task: "Login Screen"
     implemented: true
-    working: true
+    working: false
     file: "/app/frontend/app/auth/login.tsx"
-    stuck_count: 2
+    stuck_count: 3
     priority: "high"
     needs_retesting: false
     status_history:
@@ -362,6 +362,9 @@ frontend:
       - working: true
         agent: "testing"
         comment: "ROUND 2 VERIFICATION: Login screen confirmed working perfectly. Club user credentials (newclubtest6051@test.com/TestPass123!) can be entered correctly. Form renders beautifully on mobile (390x844) with proper Italian localization. Green 'Accedi' button visible and styled correctly. No loading screen blocking access."
+      - working: false
+        agent: "testing"
+        comment: "PRODUCTION BUILD CRITICAL ISSUE: Login button 'Accedi' is missing from the form. Input fields render correctly and accept credentials, but no submit button is visible. This blocks all authentication flows. Backend logs show 401 Unauthorized errors indicating frontend is not properly sending auth tokens after login attempts."
 
   - task: "Register Screen (Player)"
     implemented: true
@@ -406,7 +409,7 @@ frontend:
     implemented: true
     working: false
     file: "/app/frontend/app/club/dashboard.tsx"
-    stuck_count: 1
+    stuck_count: 2
     priority: "high"
     needs_retesting: false
     status_history:
@@ -416,6 +419,9 @@ frontend:
       - working: false
         agent: "testing"
         comment: "ROUND 2 VERIFICATION: Club dashboard authentication issue persists. Backend logs show '401 Unauthorized' for /api/club/dashboard endpoint. This indicates frontend is not properly sending authentication tokens or session management is broken. Critical issue blocking club admin functionality."
+      - working: false
+        agent: "testing"
+        comment: "PRODUCTION BUILD TESTING: Club dashboard error persists. Shows 'Impossibile caricare la dashboard' with 'Riprova' button. This is a recurring authentication issue that blocks all club admin functionality. Frontend not properly sending auth tokens to backend. CRITICAL BLOCKER for club users."
 
   - task: "Match Detail Screen"
     implemented: true
@@ -498,6 +504,18 @@ frontend:
         agent: "testing"
         comment: "ROUND 2 VERIFICATION: Player home dashboard working correctly. Shows 'Benvenuto, Giocatore' greeting. Rating cards display properly (Padel: 1200, Tennis: 1200) with sport icons. 'Partite Disponibili' section present (showing 'Nessuna partita trovata'). Bottom navigation with 4 tabs working. 'Cerca' button for finding matches. Mobile responsive (390x844)."
 
+  - task: "Edit Court Route Configuration"
+    implemented: false
+    working: false
+    file: "/app/frontend/app/club/edit-court/[courtId].tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: "CRITICAL ROUTING BUG: Expo logs show 'No route named edit-court exists in nested children'. The route structure shows 'edit-court/[courtId]' exists but 'edit-court' is being looked for. This causes edit court functionality to fail with routing errors. Route configuration needs to be fixed to properly handle /club/edit-court/{courtId} URLs."
+
 metadata:
   created_by: "main_agent"
   version: "1.0"
@@ -506,11 +524,12 @@ metadata:
 
 test_plan:
   current_focus:
+    - "Login Screen"
     - "Club Dashboard Error"
-    - "Login form submission integration"
-    - "Club registration form submission"
+    - "Edit Court Route Configuration"
   stuck_tasks:
     - "Club Dashboard Error"
+    - "Login Screen"
   test_all: false
   test_priority: "critical_first"
 
@@ -894,3 +913,50 @@ agent_communication:
       🏆 APPLE REVIEW STATUS: 
       Frontend UI is now fully functional and Apple Review ready!
       All critical loading issues resolved. Only backend integration fixes needed for complete functionality.
+  - agent: "testing"
+    message: |
+      PRODUCTION BUILD COMPREHENSIVE TESTING COMPLETED - CRITICAL FINDINGS
+      
+      🎯 REVIEW REQUEST TESTING RESULTS (6/6 TESTS EXECUTED):
+      
+      ✅ MAJOR SUCCESS: Loading screen issue RESOLVED permanently
+      - App loads correctly without "Caricamento..." blocking
+      - All pages accessible on mobile viewport (390x844)
+      - No more infinite loading states detected
+      
+      📱 SPECIFIC TEST RESULTS:
+      
+      ❌ TEST 1: Edit Court Route Fix - BLOCKED
+      - CRITICAL: Login button "Accedi" missing from login form
+      - Input fields render correctly but no submit button visible
+      - Cannot test edit court flow without authentication
+      - Expo logs show routing warning: "No route named 'edit-court' exists"
+      
+      ❌ TEST 2: Club Dashboard - FAIL
+      - Shows "Impossibile caricare la dashboard" error with "Riprova" button
+      - "Conferma Risultati" button not found (expected due to dashboard error)
+      - Backend logs show "401 Unauthorized" for /api/club/dashboard
+      
+      ❌ TEST 3: Player Match Join Flow - BLOCKED
+      - Cannot test due to missing login button
+      - No match cards found (expected in clean environment)
+      
+      ❌ TEST 4: Match Result Submission - BLOCKED
+      - Cannot test due to authentication issues
+      - No result forms found (expected without matches)
+      
+      ✅ TEST 5: Player Notifications - PASS
+      - Page loads correctly with "Nessuna notifica" message
+      - Proper Italian localization and mobile responsive design
+      
+      ✅ TEST 6: 404 Page Verification - PASS
+      - Shows proper "Pagina non trovata" page (NOT black Unmatched Route screen)
+      - Professional error page with navigation buttons
+      
+      🚨 CRITICAL ISSUES IDENTIFIED:
+      1. **Authentication System Broken**: Login button missing, 401 errors throughout
+      2. **Edit Court Route Bug**: Routing configuration issue in Expo
+      3. **Club Dashboard Error**: Persistent authentication failure
+      
+      🏆 RECOMMENDATION: Fix authentication integration before further testing
+      Backend APIs are working correctly - the issue is frontend not sending auth tokens properly.
