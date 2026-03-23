@@ -102,7 +102,7 @@ export default function ClubLayout() {
         }}
       />
       <Tabs.Screen
-        name="edit-court"
+        name="edit-court/[courtId]"
         options={{
           href: null,
         }}
