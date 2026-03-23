@@ -70,10 +70,6 @@ def send_password_reset_email(to_email: str, reset_token: str, user_name: str = 
         return False
     
     try:
-        # Create reset link - this should point to your app's deep link or web URL
-        # For mobile app, we'll use a custom URL scheme or universal link
-        reset_link = f"matchsport24://reset-password?token={reset_token}"
-        
         # Create message
         msg = MIMEMultipart('alternative')
         msg['Subject'] = f"🔐 {APP_NAME} - Recupera la tua Password"
@@ -160,6 +156,84 @@ Il Team di {APP_NAME}
         logger.error(f"Failed to send password reset email to {to_email}: {str(e)}")
         return False
 
+# ======================= PUSH NOTIFICATIONS =======================
+
+async def send_push_notification(expo_token: str, title: str, body: str, data: dict = None):
+    """Send push notification via Expo Push Service"""
+    if not expo_token or not expo_token.startswith('ExponentPushToken'):
+        return False
+    
+    try:
+        message = {
+            "to": expo_token,
+            "sound": "default",
+            "title": title,
+            "body": body,
+            "data": data or {}
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://exp.host/--/api/v2/push/send",
+                json=message,
+                headers={"Content-Type": "application/json"}
+            )
+            
+            if response.status_code == 200:
+                logger.info(f"Push notification sent to {expo_token[:30]}...")
+                return True
+            else:
+                logger.warning(f"Push notification failed: {response.text}")
+                return False
+                
+    except Exception as e:
+        logger.error(f"Error sending push notification: {e}")
+        return False
+
+async def create_notification(
+    user_id: str,
+    title: str,
+    message: str,
+    notification_type: str,
+    match_id: str = None,
+    sender_id: str = None,
+    data: dict = None
+) -> dict:
+    """Create notification in database and send push notification"""
+    
+    notification = {
+        "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
+        "user_id": user_id,
+        "title": title,
+        "message": message,
+        "type": notification_type,
+        "match_id": match_id,
+        "sender_id": sender_id,
+        "data": data or {},
+        "is_read": False,
+        "created_at": datetime.now(timezone.utc)
+    }
+    
+    await db.notifications.insert_one(notification)
+    logger.info(f"Notification created: {notification_type} for user {user_id}")
+    
+    # Try to send push notification
+    user = await db.users.find_one({"user_id": user_id})
+    if user and user.get("expo_push_token"):
+        await send_push_notification(
+            user["expo_push_token"],
+            title,
+            message,
+            {
+                "type": notification_type,
+                "match_id": match_id,
+                "notification_id": notification["notification_id"],
+                **(data or {})
+            }
+        )
+    
+    return notification
+
 # ======================= MODELS =======================
 
 # Sports enum
@@ -174,6 +248,16 @@ MATCH_FORMATS = {
 
 # User roles
 ROLES = ["player", "club_admin", "super_admin"]
+
+# Notification types
+NOTIFICATION_TYPES = {
+    "MATCH_CHAT_MESSAGE": "chat_message",
+    "MATCH_PLAYER_JOINED": "player_joined", 
+    "MATCH_FULL": "match_full",
+    "MATCH_RESULT_SUBMITTED": "result_submitted",
+    "MATCH_RESULT_CONFIRMED": "result_confirmed",
+    "BOOKING": "booking"
+}
 
 # Subscription plans
 SUBSCRIPTION_PLANS = {
@@ -551,6 +635,19 @@ async def logout(request: Request):
     response = JSONResponse(content={"message": "Logged out successfully"})
     response.delete_cookie(key="session_token", path="/")
     return response
+
+class PushTokenRequest(BaseModel):
+    expo_push_token: str
+
+@api_router.put("/auth/push-token")
+async def update_push_token(request: PushTokenRequest, user: dict = Depends(get_current_user)):
+    """Register or update Expo push token for the current user"""
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"expo_push_token": request.expo_push_token}}
+    )
+    logger.info(f"Push token updated for user {user['user_id']}")
+    return {"message": "Push token updated successfully"}
 
 # ======================= PASSWORD RESET ENDPOINTS =======================
 
@@ -1083,17 +1180,41 @@ async def join_match(match_id: str, user: dict = Depends(get_current_user)):
         {"$set": {"current_players": new_count, "status": new_status, "updated_at": datetime.now(timezone.utc)}}
     )
     
-    # Create notification for user
-    notification = {
-        "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
-        "user_id": user["user_id"],
-        "title": "Prenotazione confermata",
-        "message": f"Ti sei iscritto alla partita di {match['sport']} del {match['date']}",
-        "type": "booking",
-        "is_read": False,
-        "created_at": datetime.now(timezone.utc)
-    }
-    await db.notifications.insert_one(notification)
+    # Create notification for the joining user
+    await create_notification(
+        user_id=user["user_id"],
+        title="Prenotazione confermata",
+        message=f"Ti sei iscritto alla partita di {match['sport']} del {match['date']}",
+        notification_type=NOTIFICATION_TYPES["BOOKING"],
+        match_id=match_id
+    )
+    
+    # Notify other participants that someone joined
+    participants = await db.match_participants.find({"match_id": match_id}).to_list(100)
+    for p in participants:
+        if p["user_id"] != user["user_id"]:
+            await create_notification(
+                user_id=p["user_id"],
+                title="Nuovo giocatore",
+                message=f"{user['name']} si è iscritto alla partita di {match['sport']}",
+                notification_type=NOTIFICATION_TYPES["MATCH_PLAYER_JOINED"],
+                match_id=match_id,
+                sender_id=user["user_id"]
+            )
+    
+    # If match is now full, notify the club
+    if new_status == "full":
+        club = await db.clubs.find_one({"club_id": match["club_id"]})
+        if club:
+            club_user = await db.users.find_one({"user_id": club["owner_id"]})
+            if club_user:
+                await create_notification(
+                    user_id=club_user["user_id"],
+                    title="Partita al completo!",
+                    message=f"La partita di {match['sport']} del {match['date']} alle {match['time']} ha raggiunto il numero massimo di giocatori",
+                    notification_type=NOTIFICATION_TYPES["MATCH_FULL"],
+                    match_id=match_id
+                )
     
     return {"message": "Joined successfully", "current_players": new_count, "status": new_status}
 
@@ -1242,21 +1363,33 @@ async def submit_match_result(match_id: str, result_data: MatchResultSubmit, use
     else:
         await db.match_results.insert_one(result)
     
+    # Notify club about result submission
+    match_club = await db.clubs.find_one({"club_id": match["club_id"]})
+    if match_club:
+        club_user = await db.users.find_one({"user_id": match_club["owner_id"]})
+        if club_user and club_user["user_id"] != user["user_id"]:
+            await create_notification(
+                user_id=club_user["user_id"],
+                title="Risultato da confermare",
+                message=f"{user['name']} ha inserito il risultato della partita di {match['sport']} del {match['date']}",
+                notification_type=NOTIFICATION_TYPES["MATCH_RESULT_SUBMITTED"],
+                match_id=match_id,
+                sender_id=user["user_id"],
+                data={"score_a": result_data.score_a, "score_b": result_data.score_b}
+            )
+    
     # Notify other participants
     participants = await db.match_participants.find({"match_id": match_id}).to_list(20)
     for p in participants:
         if p["user_id"] != user["user_id"]:
-            notification = {
-                "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
-                "user_id": p["user_id"],
-                "title": "Risultato da confermare",
-                "message": f"È stato inserito il risultato della partita di {match['sport']}",
-                "type": "result",
-                "match_id": match_id,
-                "is_read": False,
-                "created_at": datetime.now(timezone.utc)
-            }
-            await db.notifications.insert_one(notification)
+            await create_notification(
+                user_id=p["user_id"],
+                title="Risultato da confermare",
+                message=f"È stato inserito il risultato della partita di {match['sport']}",
+                notification_type=NOTIFICATION_TYPES["MATCH_RESULT_SUBMITTED"],
+                match_id=match_id,
+                sender_id=user["user_id"]
+            )
     
     return {k: v for k, v in result.items() if k != "_id"}
 
@@ -1399,7 +1532,96 @@ async def confirm_match_result(match_id: str, user: dict = Depends(get_current_u
         
         return {"message": "Result confirmed and ratings updated", "status": "confirmed"}
     
+    # Notify all participants when result is confirmed
+    match = await db.matches.find_one({"match_id": match_id})
+    for p in participants:
+        await create_notification(
+            user_id=p["user_id"],
+            title="Risultato confermato!",
+            message=f"Il risultato della partita di {match['sport']} del {match['date']} è stato confermato ufficialmente",
+            notification_type=NOTIFICATION_TYPES["MATCH_RESULT_CONFIRMED"],
+            match_id=match_id
+        )
+    
     return {"message": "Confirmation added", "confirmations": len(result.get("confirmations", [])) + 1}
+
+@api_router.post("/club/matches/{match_id}/result/confirm")
+async def club_confirm_match_result(match_id: str, user: dict = Depends(get_current_user)):
+    """Endpoint for club admin to confirm match result - immediate confirmation"""
+    match = await db.matches.find_one({"match_id": match_id})
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+    
+    # Verify user is club admin for this match's club
+    club = await db.clubs.find_one({"club_id": match["club_id"]})
+    if not club or club["owner_id"] != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Not authorized. Only club admin can confirm results.")
+    
+    result = await db.match_results.find_one({"match_id": match_id})
+    if not result:
+        raise HTTPException(status_code=404, detail="No result submitted for this match")
+    
+    if result.get("status") == "confirmed":
+        raise HTTPException(status_code=400, detail="Result already confirmed")
+    
+    # Club admin confirmation is final - mark as confirmed
+    await db.match_results.update_one(
+        {"match_id": match_id},
+        {"$set": {"status": "confirmed", "confirmed_by_club": True, "confirmed_at": datetime.now(timezone.utc)}}
+    )
+    
+    await db.matches.update_one(
+        {"match_id": match_id},
+        {"$set": {"status": "completed", "updated_at": datetime.now(timezone.utc)}}
+    )
+    
+    # Notify all participants that result is confirmed
+    participants = await db.match_participants.find({"match_id": match_id}).to_list(20)
+    for p in participants:
+        await create_notification(
+            user_id=p["user_id"],
+            title="Risultato confermato dal circolo",
+            message=f"Il circolo {club['name']} ha confermato il risultato della partita di {match['sport']} del {match['date']}",
+            notification_type=NOTIFICATION_TYPES["MATCH_RESULT_CONFIRMED"],
+            match_id=match_id
+        )
+    
+    return {"message": "Result confirmed by club", "status": "confirmed"}
+
+@api_router.get("/club/matches/pending-results")
+async def get_club_pending_results(user: dict = Depends(get_current_user)):
+    """Get all matches with pending results for the club admin to confirm"""
+    club = await db.clubs.find_one({"admin_user_id": user["user_id"]})
+    if not club:
+        raise HTTPException(status_code=404, detail="Club not found")
+    
+    # Find all matches for this club with pending results
+    matches = await db.matches.find({"club_id": club["club_id"]}).to_list(100)
+    match_ids = [m["match_id"] for m in matches]
+    
+    pending_results = await db.match_results.find({
+        "match_id": {"$in": match_ids},
+        "status": "pending_confirmation"
+    }).to_list(100)
+    
+    # Enrich with match details
+    result_list = []
+    for result in pending_results:
+        match = next((m for m in matches if m["match_id"] == result["match_id"]), None)
+        if match:
+            submitter = await db.users.find_one({"user_id": result["submitted_by"]})
+            result_list.append({
+                **{k: v for k, v in result.items() if k != "_id"},
+                "match": {
+                    "sport": match["sport"],
+                    "date": match["date"],
+                    "time": match["time"],
+                    "court_id": match.get("court_id")
+                },
+                "submitted_by_name": submitter["name"] if submitter else "Unknown"
+            })
+    
+    return result_list
 
 # ======================= CHAT ENDPOINTS =======================
 
@@ -1482,6 +1704,19 @@ async def send_chat_message(match_id: str, message: ChatMessage, user: dict = De
     
     # Emit socket event
     await sio.emit(f"chat_{match_id}", {k: v for k, v in chat_message.items() if k != "_id"})
+    
+    # Send push notifications to other participants (excluding sender)
+    participants = await db.match_participants.find({"match_id": match_id}).to_list(20)
+    for p in participants:
+        if p["user_id"] != user["user_id"]:
+            await create_notification(
+                user_id=p["user_id"],
+                title=f"Nuovo messaggio da {user['name']}",
+                message=message.content[:100] + ("..." if len(message.content) > 100 else ""),
+                notification_type=NOTIFICATION_TYPES["MATCH_CHAT_MESSAGE"],
+                match_id=match_id,
+                sender_id=user["user_id"]
+            )
     
     return {k: v for k, v in chat_message.items() if k != "_id"}
 

@@ -198,7 +198,7 @@ export default function EditClubProfileScreen() {
         console.log('[Upload] Compressed image size:', Math.round(compressedBase64.length / 1024), 'KB');
         
         // Upload to backend
-        await apiClient.updateClub({ logo: compressedBase64 });
+        await apiClient.updateMyClub({ logo: compressedBase64 });
         setLogo(compressedBase64);
         successHaptic();
         Alert.alert('Successo', 'Foto del circolo aggiornata');
@@ -233,7 +233,7 @@ export default function EditClubProfileScreen() {
       try {
         const compressedBase64 = await compressImage(result.assets[0].uri);
         
-        await apiClient.updateClub({ logo: compressedBase64 });
+        await apiClient.updateMyClub({ logo: compressedBase64 });
         setLogo(compressedBase64);
         successHaptic();
         Alert.alert('Successo', 'Foto del circolo aggiornata');
@@ -266,7 +266,7 @@ export default function EditClubProfileScreen() {
 
     setIsSaving(true);
     try {
-      await apiClient.updateClub({
+      await apiClient.updateMyClub({
         name: name.trim(),
         description: description.trim() || null,
         address: address.trim(),

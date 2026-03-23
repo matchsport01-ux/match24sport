@@ -385,6 +385,45 @@ class APIClient {
     const response = await this.client.get('/health');
     return response.data;
   }
+
+  // Push Notifications
+  async updatePushToken(expoPushToken: string) {
+    const response = await this.client.put('/auth/push-token', { expo_push_token: expoPushToken });
+    return response.data;
+  }
+
+  // Match Results
+  async submitMatchResult(matchId: string, resultData: {
+    score_a: number;
+    score_b: number;
+    winner_team: string;
+    team_a_players: string[];
+    team_b_players: string[];
+  }) {
+    const response = await this.client.post(`/matches/${matchId}/result`, resultData);
+    return response.data;
+  }
+
+  async confirmMatchResult(matchId: string) {
+    const response = await this.client.post(`/matches/${matchId}/result/confirm`);
+    return response.data;
+  }
+
+  async getMatchResult(matchId: string) {
+    const response = await this.client.get(`/matches/${matchId}/result`);
+    return response.data;
+  }
+
+  // Club: Match Results Confirmation
+  async clubConfirmMatchResult(matchId: string) {
+    const response = await this.client.post(`/club/matches/${matchId}/result/confirm`);
+    return response.data;
+  }
+
+  async getClubPendingResults() {
+    const response = await this.client.get('/club/matches/pending-results');
+    return response.data;
+  }
 }
 
 export const apiClient = new APIClient();

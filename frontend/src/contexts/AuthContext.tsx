@@ -4,6 +4,7 @@ import { apiClient } from '../api/client';
 import { User } from '../types';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import { pushNotificationService } from '../services/pushNotifications';
 
 interface AuthContextType {
   user: User | null;
@@ -61,6 +62,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
+
+  // Register for push notifications when user is authenticated
+  useEffect(() => {
+    if (user) {
+      pushNotificationService.registerTokenWithBackend();
+      pushNotificationService.setupNotificationListeners();
+    }
+    
+    return () => {
+      pushNotificationService.removeListeners();
+    };
+  }, [user]);
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);

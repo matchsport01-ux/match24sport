@@ -143,29 +143,70 @@ export default function MatchChatScreen() {
     try {
       const sentMessage = await apiClient.sendChatMessage(id, messageContent);
       
-      // Add the real message ID to processed
-      processedMessageIds.current.add(sentMessage.message_id);
-      
-      // Replace optimistic message with the real one from server
-      setMessages((prev) => 
-        prev.map(msg => 
-          msg.message_id === tempId ? sentMessage : msg
-        )
-      );
+      // Success! Add the real message ID to processed
+      if (sentMessage && sentMessage.message_id) {
+        processedMessageIds.current.add(sentMessage.message_id);
+        
+        // Replace optimistic message with the real one from server
+        setMessages((prev) => 
+          prev.map(msg => 
+            msg.message_id === tempId ? sentMessage : msg
+          )
+        );
+      }
+      // Message sent successfully - no error to show
       
     } catch (error: any) {
       console.error('Error sending message:', error);
       
-      // Remove optimistic message on error
-      setMessages((prev) => prev.filter(msg => msg.message_id !== tempId));
-      processedMessageIds.current.delete(tempId);
+      // Check if the error is a network/timeout issue but message might have been saved
+      // If we get a response with status 200/201, the message was actually saved
+      const responseStatus = error.response?.status;
+      const isServerError = responseStatus && responseStatus >= 500;
+      const isClientError = responseStatus && responseStatus >= 400 && responseStatus < 500;
       
-      // Restore the message text
-      setNewMessage(messageContent);
-      
-      // Show error to user
-      const errorDetail = error.response?.data?.detail || 'Impossibile inviare il messaggio';
-      Alert.alert('Errore', errorDetail);
+      if (isClientError) {
+        // True client error (auth, validation, etc.) - remove optimistic message
+        setMessages((prev) => prev.filter(msg => msg.message_id !== tempId));
+        processedMessageIds.current.delete(tempId);
+        
+        // Restore the message text
+        setNewMessage(messageContent);
+        
+        // Show error to user
+        const errorDetail = error.response?.data?.detail || 'Impossibile inviare il messaggio';
+        Alert.alert('Errore', errorDetail);
+      } else {
+        // Network error or server error - message might have been saved
+        // Keep the optimistic message and don't show error (will sync on next fetch)
+        // Mark the optimistic message as potentially sent (remove temp status)
+        console.log('[Chat] Network/server issue - keeping optimistic message, will sync on refresh');
+        
+        // After a delay, try to refresh messages to see if it was saved
+        setTimeout(async () => {
+          try {
+            const freshMessages = await apiClient.getMatchChat(id);
+            const savedMessage = freshMessages.find(
+              (m: ChatMessage) => m.content === messageContent && m.user_id === user.user_id
+            );
+            
+            if (savedMessage) {
+              // Message was saved! Update the list
+              processedMessageIds.current.add(savedMessage.message_id);
+              setMessages(freshMessages);
+            } else {
+              // Message wasn't saved - now show error
+              setMessages((prev) => prev.filter(msg => msg.message_id !== tempId));
+              processedMessageIds.current.delete(tempId);
+              setNewMessage(messageContent);
+              Alert.alert('Errore', 'Impossibile inviare il messaggio. Riprova.');
+            }
+          } catch (refreshError) {
+            // Couldn't refresh - keep optimistic for now
+            console.log('[Chat] Refresh failed, keeping optimistic message');
+          }
+        }, 2000);
+      }
     } finally {
       setIsSending(false);
     }

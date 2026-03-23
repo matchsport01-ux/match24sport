@@ -26,6 +26,80 @@ export default function ClubNotificationsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'chat_message':
+      case 'MATCH_CHAT_MESSAGE':
+        return 'chatbubble-outline';
+      case 'player_joined':
+      case 'MATCH_PLAYER_JOINED':
+        return 'person-add-outline';
+      case 'match_full':
+      case 'MATCH_FULL':
+        return 'checkmark-circle-outline';
+      case 'result_submitted':
+      case 'MATCH_RESULT_SUBMITTED':
+        return 'trophy-outline';
+      case 'result_confirmed':
+      case 'MATCH_RESULT_CONFIRMED':
+        return 'ribbon-outline';
+      case 'booking':
+        return 'calendar-outline';
+      default:
+        return 'notifications-outline';
+    }
+  };
+
+  const getNotificationColor = (type: string) => {
+    switch (type) {
+      case 'chat_message':
+      case 'MATCH_CHAT_MESSAGE':
+        return COLORS.primary;
+      case 'player_joined':
+      case 'MATCH_PLAYER_JOINED':
+        return '#3B82F6'; // blue
+      case 'match_full':
+      case 'MATCH_FULL':
+        return COLORS.success;
+      case 'result_submitted':
+      case 'MATCH_RESULT_SUBMITTED':
+        return '#F59E0B'; // amber
+      case 'result_confirmed':
+      case 'MATCH_RESULT_CONFIRMED':
+        return COLORS.primary;
+      default:
+        return COLORS.secondary;
+    }
+  };
+
+  const handleNotificationPress = async (notification: Notification) => {
+    // Mark as read
+    if (!notification.is_read) {
+      try {
+        await apiClient.markNotificationRead(notification.notification_id);
+        setNotifications(prev => 
+          prev.map(n => n.notification_id === notification.notification_id ? {...n, is_read: true} : n)
+        );
+      } catch (error) {
+        console.error('Error marking notification read:', error);
+      }
+    }
+
+    // Navigate based on type
+    const matchId = (notification as any).match_id;
+    if (matchId) {
+      switch (notification.type) {
+        case 'result_submitted':
+        case 'MATCH_RESULT_SUBMITTED':
+          // Navigate to pending results
+          router.push('/club/pending-results');
+          break;
+        default:
+          router.push(`/match/${matchId}`);
+      }
+    }
+  };
+
   const fetchNotifications = async () => {
     try {
       const data = await apiClient.getNotifications(50);
@@ -85,23 +159,32 @@ export default function ClubNotificationsScreen() {
       >
         {notifications.length > 0 ? (
           notifications.map((notification) => (
-            <Card
+            <TouchableOpacity 
               key={notification.notification_id}
-              style={[styles.notificationCard, !notification.is_read && styles.unreadCard]}
+              onPress={() => handleNotificationPress(notification)}
+              activeOpacity={0.7}
             >
-              <View style={styles.notificationContent}>
-                <View style={styles.iconContainer}>
-                  <Ionicons name="notifications" size={20} color={COLORS.secondary} />
+              <Card
+                style={[styles.notificationCard, !notification.is_read && styles.unreadCard]}
+              >
+                <View style={styles.notificationContent}>
+                  <View style={[styles.iconContainer, { backgroundColor: getNotificationColor(notification.type) + '20' }]}>
+                    <Ionicons 
+                      name={getNotificationIcon(notification.type)} 
+                      size={20} 
+                      color={getNotificationColor(notification.type)} 
+                    />
+                  </View>
+                  <View style={styles.textContainer}>
+                    <Text style={styles.notificationTitle}>{notification.title}</Text>
+                    <Text style={styles.notificationMessage}>{notification.message}</Text>
+                    <Text style={styles.notificationTime}>
+                      {format(parseISO(notification.created_at), 'dd/MM/yyyy HH:mm')}
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.textContainer}>
-                  <Text style={styles.notificationTitle}>{notification.title}</Text>
-                  <Text style={styles.notificationMessage}>{notification.message}</Text>
-                  <Text style={styles.notificationTime}>
-                    {format(parseISO(notification.created_at), 'dd/MM/yyyy HH:mm')}
-                  </Text>
-                </View>
-              </View>
-            </Card>
+              </Card>
+            </TouchableOpacity>
           ))
         ) : (
           <EmptyState
