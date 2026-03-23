@@ -308,9 +308,9 @@ backend:
 frontend:
   - task: "Landing Page"
     implemented: true
-    working: true
+    working: false
     file: "/app/frontend/app/index.tsx"
-    stuck_count: 1
+    stuck_count: 2
     priority: "high"
     needs_retesting: false
     status_history:
@@ -323,12 +323,15 @@ frontend:
       - working: true
         agent: "testing"
         comment: "RESOLVED: Loading screen issue fixed. App now loads properly and shows onboarding/landing screens correctly. AuthContext timeout mechanism working."
+      - working: false
+        agent: "testing"
+        comment: "CRITICAL REGRESSION: Loading screen issue has returned. App gets stuck on 'Caricamento...' screen again. Comprehensive testing blocked. Onboarding flow present but app doesn't progress past loading state. This is a recurring issue that needs permanent fix."
 
   - task: "Login Screen"
     implemented: true
-    working: true
+    working: false
     file: "/app/frontend/app/auth/login.tsx"
-    stuck_count: 1
+    stuck_count: 2
     priority: "high"
     needs_retesting: false
     status_history:
@@ -341,6 +344,9 @@ frontend:
       - working: true
         agent: "testing"
         comment: "APPLE REVIEW READY: Login form working perfectly. Input fields stable (no flickering), demo credentials (reviewer@apple.com/AppleReview2024!) accepted, form renders correctly on mobile. Minor: Frontend form submission needs backend integration fix, but backend API confirmed working via curl."
+      - working: false
+        agent: "testing"
+        comment: "BLOCKED BY LOADING SCREEN: Login page is accessible when directly navigated to (/auth/login) and renders correctly with stable input fields. Demo credentials can be entered. However, comprehensive testing blocked by recurring loading screen issue. Form submission times out due to underlying authentication flow problems."
 
   - task: "Register Screen (Player)"
     implemented: true
@@ -419,16 +425,17 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Frontend loading screen issue"
-    - "AuthContext infinite loading fix"
+    - "CRITICAL: Loading screen issue has returned"
+    - "Comprehensive user flow testing"
+    - "Mobile responsiveness verification"
   stuck_tasks:
     - "Landing Page"
     - "Login Screen"  
     - "Register Screen (Player)"
     - "Player Search Screen"
     - "Match Detail Screen"
-  test_all: false
-  test_priority: "stuck_first"
+  test_all: true
+  test_priority: "critical_first"
 
 agent_communication:
   - agent: "main"
@@ -569,3 +576,38 @@ agent_communication:
       Base URL: https://padel-finder-app.preview.emergentagent.com
       All endpoints returning proper HTTP status codes with valid JSON responses.
       Backend APIs are production-ready and fully functional for Apple App Store review.
+  - agent: "testing"
+    message: |
+      COMPREHENSIVE FRONTEND TESTING ATTEMPTED - CRITICAL ISSUE IDENTIFIED
+      
+      ❌ CRITICAL REGRESSION: Loading screen issue has returned and is blocking all user flows
+      
+      TESTING FINDINGS:
+      🔍 ATTEMPTED COMPREHENSIVE TESTING:
+      - Player registration flow: BLOCKED by loading screen
+      - Club admin registration flow: BLOCKED by loading screen  
+      - Login flow: Partially accessible but form submission fails
+      - UI/UX checks: Limited due to loading screen blocking navigation
+      - Match flow: Cannot test due to authentication issues
+      
+      ✅ WHAT WORKS WHEN ACCESSIBLE:
+      - Login page renders correctly with stable input fields
+      - Demo credentials (reviewer@apple.com/AppleReview2024!) can be entered
+      - Registration pages are accessible via direct navigation
+      - Forgot password page is accessible
+      - Input fields are stable (no flickering)
+      - Buttons are clickable and visible
+      - Mobile responsiveness maintained (iPhone 14 - 390x844)
+      
+      ❌ CRITICAL ISSUES:
+      1. App gets stuck on "Caricamento..." (Loading) screen - RECURRING ISSUE
+      2. Onboarding flow present but doesn't complete properly
+      3. AuthContext loading state never resolves consistently
+      4. Form submissions timeout due to authentication flow problems
+      5. Cannot complete comprehensive user flow testing as requested
+      
+      🚨 IMPACT: This loading screen issue is a SHOWSTOPPER for Apple App Store review
+      The app cannot be properly tested or used by reviewers if it gets stuck on loading screen.
+      
+      RECOMMENDATION: Main agent must prioritize fixing the AuthContext loading issue permanently
+      before any comprehensive testing can be completed successfully.
