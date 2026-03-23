@@ -1800,5 +1800,42 @@ async def leave_match_chat(sid, data):
 async def shutdown_db_client():
     client.close()
 
+@app.on_event("startup")
+async def startup_create_demo_accounts():
+    """Create demo accounts on startup if they don't exist"""
+    logger.info("Checking demo accounts...")
+    
+    # Create Apple Reviewer account
+    apple_reviewer = await db.users.find_one({"email": "reviewer@apple.com"})
+    if not apple_reviewer:
+        logger.info("Creating Apple Reviewer account...")
+        apple_user = {
+            "user_id": f"user_{uuid.uuid4().hex[:12]}",
+            "email": "reviewer@apple.com",
+            "password_hash": pwd_context.hash("AppleReview2024!"),
+            "name": "Apple Reviewer",
+            "role": "player",
+            "is_active": True,
+            "language": "it",
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }
+        await db.users.insert_one(apple_user)
+        
+        # Create player profile
+        profile = {
+            "user_id": apple_user["user_id"],
+            "bio": "Apple App Store Reviewer",
+            "city": "Roma",
+            "preferred_sports": ["padel", "tennis"],
+            "skill_level": "intermediate",
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }
+        await db.player_profiles.insert_one(profile)
+        logger.info("Apple Reviewer account created successfully!")
+    else:
+        logger.info("Apple Reviewer account already exists")
+
 # Mount socket app
 app.mount("/socket.io", socket_app)
