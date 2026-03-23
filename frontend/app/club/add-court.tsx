@@ -285,11 +285,12 @@ const styles = StyleSheet.create({
   },
   sportsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
   },
   sportOption: {
-    flex: 1,
-    padding: 20,
+    width: '47%',
+    padding: 16,
     borderRadius: 16,
     backgroundColor: COLORS.surface,
     alignItems: 'center',
@@ -297,10 +298,11 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   sportText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: COLORS.textMuted,
     marginTop: 8,
+    textAlign: 'center',
   },
   indoorRow: {
     flexDirection: 'row',
