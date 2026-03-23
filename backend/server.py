@@ -783,11 +783,16 @@ async def list_matches(
 ):
     query = {"status": status}
     
+    # Filter out past matches - only show today and future
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    query["date"] = {"$gte": today}
+    
     if city:
         query["club_city"] = {"$regex": city, "$options": "i"}
     if sport:
         query["sport"] = sport
     if date:
+        # If specific date requested, use that instead
         query["date"] = date
     if skill_level and skill_level != "all":
         query["$or"] = [{"skill_level": skill_level}, {"skill_level": "all"}]

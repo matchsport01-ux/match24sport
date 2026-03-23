@@ -90,6 +90,8 @@ export default function PlayerOnboardingScreen() {
               value={city}
               onChangeText={setCity}
               leftIcon="location-outline"
+              autoComplete="off"
+              textContentType="none"
             />
             <Input
               label={`${t('nickname')} (opzionale)`}
@@ -97,6 +99,8 @@ export default function PlayerOnboardingScreen() {
               value={nickname}
               onChangeText={setNickname}
               leftIcon="at-outline"
+              autoComplete="off"
+              textContentType="none"
             />
           </View>
 

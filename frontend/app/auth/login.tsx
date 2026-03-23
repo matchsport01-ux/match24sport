@@ -71,7 +71,7 @@ export default function LoginScreen() {
           <View style={styles.header}>
             <View style={styles.logoContainer}>
               <Image
-                source={{ uri: 'https://customer-assets.emergentagent.com/job_padel-finder-app/artifacts/di415713_atch%20%281%29.png' }}
+                source={{ uri: 'https://customer-assets.emergentagent.com/job_padel-finder-app/artifacts/aurb9rfp_icona%20app.png' }}
                 style={styles.logoImage}
                 resizeMode="contain"
               />

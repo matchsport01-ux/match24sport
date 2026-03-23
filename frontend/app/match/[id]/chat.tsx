@@ -78,14 +78,37 @@ export default function MatchChatScreen() {
   }, [id, fetchMessages]);
 
   const handleSend = async () => {
-    if (!newMessage.trim() || !id) return;
+    if (!newMessage.trim() || !id || !user) return;
 
+    const messageContent = newMessage.trim();
     setIsSending(true);
+    setNewMessage('');
+    
+    // Add message locally immediately for instant feedback
+    const optimisticMessage: ChatMessage = {
+      message_id: `temp_${Date.now()}`,
+      match_id: id,
+      user_id: user.user_id,
+      user_name: user.name,
+      content: messageContent,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimisticMessage]);
+    
     try {
-      await apiClient.sendChatMessage(id, newMessage.trim());
-      setNewMessage('');
-      // Message will be added via socket event
+      const sentMessage = await apiClient.sendChatMessage(id, messageContent);
+      // Replace optimistic message with real one
+      setMessages((prev) => 
+        prev.map(msg => 
+          msg.message_id === optimisticMessage.message_id ? sentMessage : msg
+        )
+      );
     } catch (error: any) {
+      // Remove optimistic message on error
+      setMessages((prev) => 
+        prev.filter(msg => msg.message_id !== optimisticMessage.message_id)
+      );
+      setNewMessage(messageContent); // Restore the message
       Alert.alert('Errore', error.response?.data?.detail || 'Impossibile inviare il messaggio');
     } finally {
       setIsSending(false);
