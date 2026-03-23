@@ -50,7 +50,7 @@ export default function ClubCourtsScreen() {
   const handleDeleteCourt = async (court: Court) => {
     Alert.alert(
       'Elimina Campo',
-      `Sei sicuro di voler disattivare "${court.name}"?`,
+      `Sei sicuro di voler eliminare "${court.name}"? Questa azione non può essere annullata.`,
       [
         { text: t('cancel'), style: 'cancel' },
         {
@@ -58,8 +58,9 @@ export default function ClubCourtsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await apiClient.deleteCourt(court.court_id);
+              await apiClient.deleteCourt(court.court_id, true); // true = permanent delete
               await fetchCourts();
+              Alert.alert('Successo', 'Campo eliminato con successo');
             } catch (error) {
               Alert.alert('Errore', 'Impossibile eliminare il campo');
             }

@@ -69,14 +69,14 @@ export default function LoginScreen() {
           </TouchableOpacity>
 
           <View style={styles.header}>
-            <View style={styles.logoContainer}>
+            <View style={styles.logoWrapper}>
               <Image
                 source={{ uri: 'https://customer-assets.emergentagent.com/job_padel-finder-app/artifacts/np98g9bo_logo%20pagna%20benvenuto.png' }}
                 style={styles.logoImage}
                 resizeMode="contain"
               />
-              <Text style={styles.logoText}>Match Sport 24</Text>
             </View>
+            <Text style={styles.logoText}>Match Sport 24</Text>
             <Text style={styles.title}>{t('login')}</Text>
             <Text style={styles.subtitle}>Accedi al tuo account Match Sport 24</Text>
           </View>
@@ -160,10 +160,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
+  logoWrapper: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 8,
+  },
   logoImage: {
     width: 100,
     height: 100,
-    borderRadius: 20,
   },
   logoText: {
     fontSize: 20,

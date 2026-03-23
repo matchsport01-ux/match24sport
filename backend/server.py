@@ -672,20 +672,28 @@ async def update_court(court_id: str, court_data: CourtUpdate, user: dict = Depe
     return court
 
 @api_router.delete("/club/courts/{court_id}")
-async def delete_court(court_id: str, user: dict = Depends(get_current_user)):
+async def delete_court(court_id: str, permanent: bool = False, user: dict = Depends(get_current_user)):
     club = await db.clubs.find_one({"admin_user_id": user["user_id"]})
     if not club:
         raise HTTPException(status_code=403, detail="Not a club admin")
     
-    result = await db.courts.update_one(
-        {"court_id": court_id, "club_id": club["club_id"]},
-        {"$set": {"is_active": False}}
-    )
-    
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Court not found")
-    
-    return {"message": "Court deactivated"}
+    if permanent:
+        # Permanent delete
+        result = await db.courts.delete_one(
+            {"court_id": court_id, "club_id": club["club_id"]}
+        )
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Court not found")
+        return {"message": "Court permanently deleted"}
+    else:
+        # Soft delete (deactivate)
+        result = await db.courts.update_one(
+            {"court_id": court_id, "club_id": club["club_id"]},
+            {"$set": {"is_active": False}}
+        )
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Court not found")
+        return {"message": "Court deactivated"}
 
 # ======================= FAVORITE CLUBS ENDPOINTS =======================
 
@@ -1841,6 +1849,44 @@ async def startup_create_demo_accounts():
         logger.info("Apple Reviewer account created successfully!")
     else:
         logger.info("Apple Reviewer account already exists")
+    
+    # Clean up past matches
+    await cleanup_past_matches()
+
+async def cleanup_past_matches():
+    """Delete unfilled past matches and mark filled past matches as completed"""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    logger.info(f"Cleaning up past matches (before {today})...")
+    
+    # Find all past matches that are still "open"
+    past_open_matches = await db.matches.find({
+        "date": {"$lt": today},
+        "status": "open"
+    }).to_list(1000)
+    
+    deleted_count = 0
+    completed_count = 0
+    
+    for match in past_open_matches:
+        match_id = match.get("match_id")
+        current_players = match.get("current_players", 0)
+        max_players = match.get("max_players", 4)
+        
+        if current_players < max_players:
+            # Match was not filled - delete it
+            await db.matches.delete_one({"match_id": match_id})
+            await db.match_participants.delete_many({"match_id": match_id})
+            await db.match_messages.delete_many({"match_id": match_id})
+            deleted_count += 1
+        else:
+            # Match was full - mark as completed
+            await db.matches.update_one(
+                {"match_id": match_id},
+                {"$set": {"status": "completed"}}
+            )
+            completed_count += 1
+    
+    logger.info(f"Cleanup complete: {deleted_count} deleted, {completed_count} marked as completed")
 
 # Mount socket app
 app.mount("/socket.io", socket_app)

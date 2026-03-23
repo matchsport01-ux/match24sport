@@ -76,13 +76,14 @@ export default function Index() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.logoContainer}>
+        <View style={styles.logoWrapper}>
           <Image
             source={{ uri: 'https://customer-assets.emergentagent.com/job_padel-finder-app/artifacts/np98g9bo_logo%20pagna%20benvenuto.png' }}
             style={styles.logoImage}
             resizeMode="contain"
           />
         </View>
+        <Text style={styles.logoText}>Match Sport 24</Text>
       </View>
 
       <View style={styles.heroSection}>
@@ -167,6 +168,12 @@ const styles = StyleSheet.create({
   header: {
     paddingVertical: 16,
     alignItems: 'center',
+  },
+  logoWrapper: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 16,
+    marginBottom: 12,
   },
   logoContainer: {
     flexDirection: 'row',

@@ -95,6 +95,11 @@ export default function MatchChatScreen() {
     };
     setMessages((prev) => [...prev, optimisticMessage]);
     
+    // Scroll to bottom immediately
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+    
     try {
       const sentMessage = await apiClient.sendChatMessage(id, messageContent);
       // Replace optimistic message with real one

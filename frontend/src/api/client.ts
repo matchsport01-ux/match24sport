@@ -213,8 +213,8 @@ class APIClient {
     return response.data;
   }
 
-  async deleteCourt(courtId: string) {
-    const response = await this.client.delete(`/club/courts/${courtId}`);
+  async deleteCourt(courtId: string, permanent: boolean = false) {
+    const response = await this.client.delete(`/club/courts/${courtId}?permanent=${permanent}`);
     return response.data;
   }
 
