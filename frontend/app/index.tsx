@@ -78,7 +78,7 @@ export default function Index() {
       <View style={styles.header}>
         <View style={styles.logoContainer}>
           <Image
-            source={{ uri: 'https://customer-assets.emergentagent.com/job_padel-finder-app/artifacts/aurb9rfp_icona%20app.png' }}
+            source={{ uri: 'https://customer-assets.emergentagent.com/job_padel-finder-app/artifacts/np98g9bo_logo%20pagna%20benvenuto.png' }}
             style={styles.logoImage}
             resizeMode="contain"
           />
