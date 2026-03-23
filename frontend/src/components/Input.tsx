@@ -1,5 +1,5 @@
-// Input Component - Stable Version
-import React, { useState } from 'react';
+// Input Component - iOS Compatible Version
+import React, { useState, useRef } from 'react';
 import {
   View,
   TextInput,
@@ -34,15 +34,23 @@ export function Input({
 }: InputProps) {
   const [isSecure, setIsSecure] = useState(secureTextEntry);
   const [isFocused, setIsFocused] = useState(false);
+  const inputRef = useRef<TextInput>(null);
 
   const handleToggleSecure = () => {
     setIsSecure(!isSecure);
   };
 
+  // Handle container press to focus input (helps with iOS keyboard issues)
+  const handleContainerPress = () => {
+    inputRef.current?.focus();
+  };
+
   return (
     <View style={[styles.container, containerStyle]}>
       {label && <Text style={styles.label}>{label}</Text>}
-      <View
+      <TouchableOpacity 
+        activeOpacity={1} 
+        onPress={handleContainerPress}
         style={[
           styles.inputContainer,
           isFocused && styles.inputFocused,
@@ -58,14 +66,21 @@ export function Input({
           />
         )}
         <TextInput
+          ref={inputRef}
           style={[styles.input, leftIcon && { paddingLeft: 0 }]}
           placeholderTextColor={COLORS.textMuted}
           secureTextEntry={isSecure}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
+          // iOS specific props to prevent autofill interference
           autoCorrect={false}
+          autoCapitalize="none"
           autoComplete="off"
           textContentType="none"
+          // Prevent iOS password autofill suggestions
+          importantForAutofill="no"
+          spellCheck={false}
+          dataDetectorTypes="none"
           {...props}
         />
         {secureTextEntry && (
@@ -82,7 +97,7 @@ export function Input({
             <Ionicons name={rightIcon} size={20} color={COLORS.textMuted} />
           </TouchableOpacity>
         )}
-      </View>
+      </TouchableOpacity>
       {error && <Text style={styles.error}>{error}</Text>}
     </View>
   );

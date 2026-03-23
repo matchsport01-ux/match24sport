@@ -1,4 +1,4 @@
-// Match Chat Screen
+// Match Chat Screen - Fixed Version
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
@@ -20,7 +20,7 @@ import { useLanguage } from '../../../src/contexts/LanguageContext';
 import { COLORS } from '../../../src/utils/constants';
 import { apiClient } from '../../../src/api/client';
 import { ChatMessage } from '../../../src/types';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { io, Socket } from 'socket.io-client';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
@@ -37,11 +37,36 @@ export default function MatchChatScreen() {
   const [isSending, setIsSending] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const socketRef = useRef<Socket | null>(null);
+  const processedMessageIds = useRef<Set<string>>(new Set());
+
+  // Safe date formatting that handles both ISO strings and Date objects
+  const formatMessageTime = (dateInput: string | Date) => {
+    try {
+      let date: Date;
+      if (typeof dateInput === 'string') {
+        // Handle ISO string with or without timezone
+        date = new Date(dateInput);
+      } else {
+        date = dateInput;
+      }
+      
+      if (isNaN(date.getTime())) {
+        return '';
+      }
+      
+      return format(date, 'HH:mm');
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return '';
+    }
+  };
 
   const fetchMessages = useCallback(async () => {
     if (!id) return;
     try {
       const data = await apiClient.getMatchChat(id);
+      // Track all fetched message IDs to prevent duplicates
+      data.forEach((msg: ChatMessage) => processedMessageIds.current.add(msg.message_id));
       setMessages(data);
     } catch (error: any) {
       if (error.response?.status === 400) {
@@ -57,7 +82,7 @@ export default function MatchChatScreen() {
   useEffect(() => {
     fetchMessages();
 
-    // Setup Socket.IO
+    // Setup Socket.IO for real-time updates
     socketRef.current = io(API_BASE_URL, {
       transports: ['websocket'],
     });
@@ -67,8 +92,19 @@ export default function MatchChatScreen() {
       socketRef.current?.emit('join_match_chat', { match_id: id });
     });
 
+    // Handle incoming socket messages - with duplicate prevention
     socketRef.current.on(`chat_${id}`, (message: ChatMessage) => {
-      setMessages((prev) => [...prev, message]);
+      // Only add if we haven't seen this message before
+      if (!processedMessageIds.current.has(message.message_id)) {
+        processedMessageIds.current.add(message.message_id);
+        setMessages((prev) => {
+          // Double-check it's not already in the list
+          if (prev.some(m => m.message_id === message.message_id)) {
+            return prev;
+          }
+          return [...prev, message];
+        });
+      }
     });
 
     return () => {
@@ -84,15 +120,19 @@ export default function MatchChatScreen() {
     setIsSending(true);
     setNewMessage('');
     
-    // Add message locally immediately for instant feedback
+    // Create optimistic message with temp ID
+    const tempId = `temp_${Date.now()}`;
     const optimisticMessage: ChatMessage = {
-      message_id: `temp_${Date.now()}`,
+      message_id: tempId,
       match_id: id,
       user_id: user.user_id,
       user_name: user.name,
       content: messageContent,
       created_at: new Date().toISOString(),
     };
+    
+    // Add to processed to prevent socket duplicate
+    processedMessageIds.current.add(tempId);
     setMessages((prev) => [...prev, optimisticMessage]);
     
     // Scroll to bottom immediately
@@ -102,19 +142,30 @@ export default function MatchChatScreen() {
     
     try {
       const sentMessage = await apiClient.sendChatMessage(id, messageContent);
-      // Replace optimistic message with real one
+      
+      // Add the real message ID to processed
+      processedMessageIds.current.add(sentMessage.message_id);
+      
+      // Replace optimistic message with the real one from server
       setMessages((prev) => 
         prev.map(msg => 
-          msg.message_id === optimisticMessage.message_id ? sentMessage : msg
+          msg.message_id === tempId ? sentMessage : msg
         )
       );
+      
     } catch (error: any) {
+      console.error('Error sending message:', error);
+      
       // Remove optimistic message on error
-      setMessages((prev) => 
-        prev.filter(msg => msg.message_id !== optimisticMessage.message_id)
-      );
-      setNewMessage(messageContent); // Restore the message
-      Alert.alert('Errore', error.response?.data?.detail || 'Impossibile inviare il messaggio');
+      setMessages((prev) => prev.filter(msg => msg.message_id !== tempId));
+      processedMessageIds.current.delete(tempId);
+      
+      // Restore the message text
+      setNewMessage(messageContent);
+      
+      // Show error to user
+      const errorDetail = error.response?.data?.detail || 'Impossibile inviare il messaggio';
+      Alert.alert('Errore', errorDetail);
     } finally {
       setIsSending(false);
     }
@@ -122,6 +173,7 @@ export default function MatchChatScreen() {
 
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     const isOwnMessage = item.user_id === user?.user_id;
+    const isTemp = item.message_id.startsWith('temp_');
 
     return (
       <View
@@ -137,12 +189,13 @@ export default function MatchChatScreen() {
           style={[
             styles.messageBubble,
             isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
+            isTemp && styles.tempMessageBubble,
           ]}
         >
           <Text style={styles.messageText}>{item.content}</Text>
         </View>
         <Text style={styles.messageTime}>
-          {format(parseISO(item.created_at), 'HH:mm')}
+          {isTemp ? 'Invio...' : formatMessageTime(item.created_at)}
         </Text>
       </View>
     );
@@ -294,6 +347,9 @@ const styles = StyleSheet.create({
   otherMessageBubble: {
     backgroundColor: COLORS.surface,
     borderBottomLeftRadius: 4,
+  },
+  tempMessageBubble: {
+    opacity: 0.7,
   },
   messageText: {
     fontSize: 15,
