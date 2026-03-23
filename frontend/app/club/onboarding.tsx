@@ -49,10 +49,13 @@ export default function ClubOnboardingScreen() {
         email: email || undefined,
       });
       
-      // Refresh user data to update role
+      // Refresh user data to update role - wait for it to complete
       if (refreshUser) {
         await refreshUser();
       }
+      
+      // Add a small delay to ensure state is updated
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       Alert.alert('Successo', 'Circolo registrato con successo! Hai 3 mesi di prova gratuita.', [
         { text: 'OK', onPress: () => router.replace('/club/dashboard') }
@@ -92,6 +95,8 @@ export default function ClubOnboardingScreen() {
               value={name}
               onChangeText={setName}
               leftIcon="business-outline"
+              autoComplete="off"
+              textContentType="none"
             />
 
             <Input
@@ -102,6 +107,8 @@ export default function ClubOnboardingScreen() {
               multiline
               numberOfLines={3}
               leftIcon="document-text-outline"
+              autoComplete="off"
+              textContentType="none"
             />
 
             <Input
@@ -110,6 +117,8 @@ export default function ClubOnboardingScreen() {
               value={address}
               onChangeText={setAddress}
               leftIcon="location-outline"
+              autoComplete="off"
+              textContentType="none"
             />
 
             <Input
@@ -118,6 +127,8 @@ export default function ClubOnboardingScreen() {
               value={city}
               onChangeText={setCity}
               leftIcon="navigate-outline"
+              autoComplete="off"
+              textContentType="none"
             />
 
             <Input
@@ -127,6 +138,8 @@ export default function ClubOnboardingScreen() {
               onChangeText={setPhone}
               keyboardType="phone-pad"
               leftIcon="call-outline"
+              autoComplete="off"
+              textContentType="none"
             />
 
             <Input
@@ -137,6 +150,8 @@ export default function ClubOnboardingScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               leftIcon="mail-outline"
+              autoComplete="off"
+              textContentType="none"
             />
 
             <Button

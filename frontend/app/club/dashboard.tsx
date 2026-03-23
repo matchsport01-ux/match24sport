@@ -30,35 +30,45 @@ export default function ClubDashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [retryCount, setRetryCount] = useState(0);
+  const maxRetries = 5;
 
   const fetchDashboard = async () => {
     try {
       const data = await apiClient.getClubDashboard();
       setDashboardData(data);
+      setRetryCount(0); // Reset retry count on success
     } catch (error: any) {
-      if (error.response?.status === 403) {
-        // First try to get club info directly
+      console.log('Dashboard fetch error:', error.response?.status, 'Retry:', retryCount);
+      
+      if (error.response?.status === 403 || error.response?.status === 404) {
+        // Club might not be ready yet, retry a few times
+        if (retryCount < maxRetries) {
+          setRetryCount(prev => prev + 1);
+          console.log(`Retrying dashboard fetch... attempt ${retryCount + 1}/${maxRetries}`);
+          setTimeout(fetchDashboard, 1500);
+          return;
+        }
+        
+        // After max retries, check if club exists
         try {
           const club = await apiClient.getMyClub();
           if (club) {
-            // Club exists, retry dashboard
-            if (retryCount < 3) {
-              setRetryCount(prev => prev + 1);
-              setTimeout(fetchDashboard, 1000);
-              return;
-            }
+            // Club exists but dashboard still fails - try one more time
+            setTimeout(fetchDashboard, 2000);
+            return;
           }
         } catch {
           // No club, redirect to onboarding
           router.replace('/club/onboarding');
           return;
         }
-        router.replace('/club/onboarding');
       }
       console.error('Error fetching dashboard:', error);
     } finally {
-      setIsLoading(false);
-      setRefreshing(false);
+      if (retryCount >= maxRetries || dashboardData) {
+        setIsLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 

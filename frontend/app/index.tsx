@@ -76,13 +76,11 @@ export default function Index() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.logoWrapper}>
-          <Image
-            source={{ uri: 'https://customer-assets.emergentagent.com/job_padel-finder-app/artifacts/np98g9bo_logo%20pagna%20benvenuto.png' }}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
-        </View>
+        <Image
+          source={{ uri: 'https://customer-assets.emergentagent.com/job_padel-finder-app/artifacts/np98g9bo_logo%20pagna%20benvenuto.png' }}
+          style={styles.logoImage}
+          resizeMode="contain"
+        />
         <Text style={styles.logoText}>Match Sport 24</Text>
       </View>
 

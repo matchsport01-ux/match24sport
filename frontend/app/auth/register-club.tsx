@@ -94,6 +94,8 @@ export default function RegisterClubScreen() {
               onChangeText={setName}
               autoCapitalize="words"
               leftIcon="person-outline"
+              autoComplete="off"
+              textContentType="none"
             />
 
             <Input
@@ -104,6 +106,8 @@ export default function RegisterClubScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               leftIcon="mail-outline"
+              autoComplete="email"
+              textContentType="emailAddress"
             />
 
             <Input
@@ -113,6 +117,8 @@ export default function RegisterClubScreen() {
               onChangeText={setPassword}
               secureTextEntry
               leftIcon="lock-closed-outline"
+              autoComplete="new-password"
+              textContentType="newPassword"
             />
 
             <Input
@@ -122,6 +128,8 @@ export default function RegisterClubScreen() {
               onChangeText={setConfirmPassword}
               secureTextEntry
               leftIcon="lock-closed-outline"
+              autoComplete="new-password"
+              textContentType="newPassword"
             />
 
             <Button
