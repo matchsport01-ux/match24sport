@@ -14,6 +14,9 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 import httpx
 import socketio
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -34,6 +37,13 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # Stripe Configuration
 STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY', 'sk_test_emergent')
 
+# Gmail SMTP Configuration
+SMTP_EMAIL = os.environ.get('SMTP_EMAIL', '')
+SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
+SMTP_HOST = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
+SMTP_PORT = int(os.environ.get('SMTP_PORT', '587'))
+APP_NAME = os.environ.get('APP_NAME', 'Match Sport 24')
+
 # Create the main app
 app = FastAPI(title="Match Sport 24 API")
 
@@ -50,6 +60,105 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# ======================= EMAIL FUNCTIONS =======================
+
+def send_password_reset_email(to_email: str, reset_token: str, user_name: str = "Utente") -> bool:
+    """Send password reset email via Gmail SMTP"""
+    if not SMTP_EMAIL or not SMTP_PASSWORD:
+        logger.warning("SMTP credentials not configured, skipping email send")
+        return False
+    
+    try:
+        # Create reset link - this should point to your app's deep link or web URL
+        # For mobile app, we'll use a custom URL scheme or universal link
+        reset_link = f"matchsport24://reset-password?token={reset_token}"
+        
+        # Create message
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f"🔐 {APP_NAME} - Recupera la tua Password"
+        msg['From'] = f"{APP_NAME} <{SMTP_EMAIL}>"
+        msg['To'] = to_email
+        
+        # Plain text version
+        text_content = f"""
+Ciao {user_name},
+
+Hai richiesto di reimpostare la password del tuo account {APP_NAME}.
+
+Il tuo codice di recupero è: {reset_token}
+
+Apri l'app {APP_NAME} e inserisci questo codice nella schermata "Recupera Password".
+
+Se non hai richiesto tu questa operazione, puoi ignorare questa email.
+
+Il link scade tra 1 ora.
+
+Buone partite!
+Il Team di {APP_NAME}
+        """
+        
+        # HTML version
+        html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0d1117; color: #ffffff; padding: 20px; }}
+        .container {{ max-width: 500px; margin: 0 auto; background: linear-gradient(135deg, #1a1f2e 0%, #0d1117 100%); border-radius: 16px; padding: 32px; }}
+        .logo {{ text-align: center; margin-bottom: 24px; }}
+        .logo-text {{ font-size: 28px; font-weight: bold; color: #00d68f; }}
+        h1 {{ color: #ffffff; font-size: 24px; margin-bottom: 16px; text-align: center; }}
+        p {{ color: #a0aec0; line-height: 1.6; margin-bottom: 16px; }}
+        .token-box {{ background: rgba(0, 214, 143, 0.1); border: 2px solid #00d68f; border-radius: 12px; padding: 20px; text-align: center; margin: 24px 0; }}
+        .token {{ font-family: monospace; font-size: 18px; color: #00d68f; letter-spacing: 2px; word-break: break-all; }}
+        .footer {{ text-align: center; margin-top: 32px; padding-top: 24px; border-top: 1px solid #2d3748; color: #718096; font-size: 12px; }}
+        .warning {{ color: #f6ad55; font-size: 13px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <span class="logo-text">⚽ {APP_NAME}</span>
+        </div>
+        <h1>Recupera la tua Password</h1>
+        <p>Ciao <strong>{user_name}</strong>,</p>
+        <p>Hai richiesto di reimpostare la password del tuo account.</p>
+        <p>Ecco il tuo codice di recupero:</p>
+        <div class="token-box">
+            <div class="token">{reset_token}</div>
+        </div>
+        <p>Apri l'app <strong>{APP_NAME}</strong> e inserisci questo codice nella schermata "Recupera Password".</p>
+        <p class="warning">⚠️ Questo codice scade tra <strong>1 ora</strong>.</p>
+        <p>Se non hai richiesto tu questa operazione, puoi ignorare questa email in tutta sicurezza.</p>
+        <div class="footer">
+            <p>Buone partite! 🎾⚽🏸</p>
+            <p>Il Team di {APP_NAME}</p>
+        </div>
+    </div>
+</body>
+</html>
+        """
+        
+        # Attach both versions
+        part1 = MIMEText(text_content, 'plain', 'utf-8')
+        part2 = MIMEText(html_content, 'html', 'utf-8')
+        msg.attach(part1)
+        msg.attach(part2)
+        
+        # Send email
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_EMAIL, SMTP_PASSWORD)
+            server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
+        
+        logger.info(f"Password reset email sent successfully to {to_email}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to send password reset email to {to_email}: {str(e)}")
+        return False
 
 # ======================= MODELS =======================
 
@@ -476,15 +585,16 @@ async def forgot_password(request: ForgotPasswordRequest):
         "used": False
     })
     
-    # TODO: In production, send actual email here
-    # For now, we'll log the token and return success
-    logger.info(f"Password reset token for {request.email}: {reset_token}")
+    # Send password reset email
+    user_name = user.get("name", "Utente")
+    email_sent = send_password_reset_email(request.email, reset_token, user_name)
     
-    # In development/demo mode, return the token (remove in production)
-    return {
-        "message": "Se l'email esiste, riceverai le istruzioni per il reset",
-        "reset_token": reset_token  # Remove this line in production
-    }
+    if email_sent:
+        logger.info(f"Password reset email sent to {request.email}")
+    else:
+        logger.warning(f"Failed to send password reset email to {request.email}, token: {reset_token}")
+    
+    return {"message": "Se l'email esiste, riceverai le istruzioni per il reset"}
 
 @api_router.post("/auth/reset-password")
 async def reset_password(request: ResetPasswordRequest):

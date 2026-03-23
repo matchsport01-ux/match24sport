@@ -25,7 +25,7 @@ export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [resetToken, setResetToken] = useState<string | null>(null);
+  const [resetToken, setResetToken] = useState('');
   const [error, setError] = useState('');
 
   const handleForgotPassword = async () => {
@@ -38,13 +38,8 @@ export default function ForgotPasswordScreen() {
     setError('');
 
     try {
-      const response = await apiClient.forgotPassword(email);
+      await apiClient.forgotPassword(email);
       setIsSuccess(true);
-      
-      // In demo mode, show the reset token
-      if (response.reset_token) {
-        setResetToken(response.reset_token);
-      }
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Errore durante la richiesta');
     } finally {
@@ -53,45 +48,90 @@ export default function ForgotPasswordScreen() {
   };
 
   const handleGoToReset = () => {
-    if (resetToken) {
-      router.push(`/auth/reset-password?token=${resetToken}`);
+    if (resetToken.trim()) {
+      router.push(`/auth/reset-password?token=${resetToken.trim()}`);
+    } else {
+      setError('Inserisci il codice ricevuto via email');
     }
   };
 
   if (isSuccess) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.successContainer}>
-          <View style={styles.successIcon}>
-            <Ionicons name="mail-outline" size={64} color={COLORS.primary} />
-          </View>
-          <Text style={styles.successTitle}>Email Inviata!</Text>
-          <Text style={styles.successText}>
-            Se l'indirizzo email è registrato, riceverai le istruzioni per reimpostare la password.
-          </Text>
-          
-          {/* Demo mode - show reset link */}
-          {resetToken && (
-            <View style={styles.demoBox}>
-              <Text style={styles.demoLabel}>Demo Mode - Link di reset:</Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
+        >
+          <ScrollView
+            contentContainerStyle={styles.successScrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.successContainer}>
+              <View style={styles.successIcon}>
+                <Ionicons name="mail-outline" size={64} color={COLORS.primary} />
+              </View>
+              <Text style={styles.successTitle}>Email Inviata!</Text>
+              <Text style={styles.successText}>
+                Controlla la tua casella email (anche lo spam) e inserisci il codice di recupero qui sotto.
+              </Text>
+              
+              {/* Token input field */}
+              <View style={styles.tokenInputContainer}>
+                <Input
+                  label="Codice di Recupero"
+                  placeholder="reset_xxxxxxxx..."
+                  value={resetToken}
+                  onChangeText={setResetToken}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  leftIcon="key-outline"
+                />
+                
+                {error ? (
+                  <View style={styles.errorContainer}>
+                    <Ionicons name="alert-circle" size={16} color={COLORS.error} />
+                    <Text style={styles.errorText}>{error}</Text>
+                  </View>
+                ) : null}
+                
+                <Button
+                  title="Reimposta Password"
+                  onPress={handleGoToReset}
+                  variant="primary"
+                  fullWidth
+                  size="large"
+                  style={{ marginTop: 16 }}
+                />
+              </View>
+              
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>oppure</Text>
+                <View style={styles.dividerLine} />
+              </View>
+              
               <Button
-                title="Reimposta Password"
-                onPress={handleGoToReset}
-                variant="primary"
+                title="Invia di nuovo"
+                onPress={() => {
+                  setIsSuccess(false);
+                  setResetToken('');
+                  setError('');
+                }}
+                variant="outline"
                 fullWidth
-                style={{ marginTop: 12 }}
+              />
+              
+              <Button
+                title="Torna al Login"
+                onPress={() => router.push('/auth/login')}
+                variant="text"
+                fullWidth
+                style={{ marginTop: 8 }}
               />
             </View>
-          )}
-          
-          <Button
-            title="Torna al Login"
-            onPress={() => router.push('/auth/login')}
-            variant="outline"
-            fullWidth
-            style={{ marginTop: 24 }}
-          />
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     );
   }
@@ -176,6 +216,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 24,
   },
+  successScrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingBottom: 40,
+    justifyContent: 'center',
+  },
   backButton: {
     width: 44,
     height: 44,
@@ -223,6 +269,7 @@ const styles = StyleSheet.create({
     color: COLORS.error,
     marginLeft: 8,
     flex: 1,
+    fontSize: 14,
   },
   form: {
     flex: 1,
@@ -242,10 +289,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   successContainer: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
   },
   successIcon: {
     width: 120,
@@ -267,20 +312,26 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
+    marginBottom: 8,
   },
-  demoBox: {
-    marginTop: 24,
-    padding: 16,
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
+  tokenInputContainer: {
     width: '100%',
-    borderWidth: 1,
-    borderColor: COLORS.primary,
+    marginTop: 24,
   },
-  demoLabel: {
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginVertical: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.border,
+  },
+  dividerText: {
+    color: COLORS.textSecondary,
+    marginHorizontal: 16,
     fontSize: 14,
-    color: COLORS.primary,
-    fontWeight: '600',
-    textAlign: 'center',
   },
 });
