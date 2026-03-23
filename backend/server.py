@@ -1554,7 +1554,7 @@ async def club_confirm_match_result(match_id: str, user: dict = Depends(get_curr
     
     # Verify user is club admin for this match's club
     club = await db.clubs.find_one({"club_id": match["club_id"]})
-    if not club or club["owner_id"] != user["user_id"]:
+    if not club or club.get("admin_user_id") != user["user_id"]:
         raise HTTPException(status_code=403, detail="Not authorized. Only club admin can confirm results.")
     
     result = await db.match_results.find_one({"match_id": match_id})
