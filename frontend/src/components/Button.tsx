@@ -1,4 +1,4 @@
-// Button Component
+// Button Component - Modern UI
 import React from 'react';
 import {
   TouchableOpacity,
@@ -7,18 +7,21 @@ import {
   ActivityIndicator,
   ViewStyle,
   TextStyle,
+  View,
 } from 'react-native';
-import { COLORS } from '../utils/constants';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, SHADOWS, BORDER_RADIUS } from '../utils/constants';
 import { mediumHaptic } from '../utils/haptics';
 
 interface ButtonProps {
   title: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'gradient';
   size?: 'small' | 'medium' | 'large';
   disabled?: boolean;
   loading?: boolean;
   icon?: React.ReactNode;
+  iconRight?: React.ReactNode;
   style?: ViewStyle;
   textStyle?: TextStyle;
   fullWidth?: boolean;
@@ -33,6 +36,7 @@ export function Button({
   disabled = false,
   loading = false,
   icon,
+  iconRight,
   style,
   textStyle,
   fullWidth = false,
@@ -44,10 +48,12 @@ export function Button({
     }
     onPress();
   };
+
   const getBackgroundColor = () => {
     if (disabled) return COLORS.surfaceLight;
     switch (variant) {
       case 'primary':
+      case 'gradient':
         return COLORS.primary;
       case 'secondary':
         return COLORS.secondary;
@@ -64,24 +70,25 @@ export function Button({
     switch (variant) {
       case 'primary':
       case 'secondary':
-        return COLORS.text;
+      case 'gradient':
+        return '#FFFFFF';
       case 'outline':
         return COLORS.primary;
       case 'ghost':
         return COLORS.textSecondary;
       default:
-        return COLORS.text;
+        return '#FFFFFF';
     }
   };
 
   const getPadding = () => {
     switch (size) {
       case 'small':
-        return { paddingVertical: 8, paddingHorizontal: 16 };
+        return { paddingVertical: 10, paddingHorizontal: 18 };
       case 'large':
-        return { paddingVertical: 16, paddingHorizontal: 32 };
+        return { paddingVertical: 18, paddingHorizontal: 36 };
       default:
-        return { paddingVertical: 12, paddingHorizontal: 24 };
+        return { paddingVertical: 14, paddingHorizontal: 28 };
     }
   };
 
@@ -96,11 +103,67 @@ export function Button({
     }
   };
 
+  const getShadow = () => {
+    if (disabled || variant === 'ghost' || variant === 'outline') return {};
+    if (variant === 'gradient' || variant === 'primary') {
+      return SHADOWS.glow(COLORS.primary);
+    }
+    return SHADOWS.medium;
+  };
+
+  const buttonContent = (
+    <View style={styles.contentContainer}>
+      {loading ? (
+        <ActivityIndicator color={getTextColor()} size="small" />
+      ) : (
+        <>
+          {icon && <View style={styles.iconLeft}>{icon}</View>}
+          <Text
+            style={[
+              styles.text,
+              { color: getTextColor(), fontSize: getFontSize() },
+              textStyle,
+            ]}
+          >
+            {title}
+          </Text>
+          {iconRight && <View style={styles.iconRight}>{iconRight}</View>}
+        </>
+      )}
+    </View>
+  );
+
+  // Use gradient for primary and gradient variants
+  if ((variant === 'primary' || variant === 'gradient') && !disabled) {
+    return (
+      <TouchableOpacity
+        onPress={handlePress}
+        disabled={disabled || loading}
+        activeOpacity={0.85}
+        style={[fullWidth && styles.fullWidth, style]}
+      >
+        <LinearGradient
+          colors={[COLORS.primary, COLORS.primaryDark]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[
+            styles.button,
+            getPadding(),
+            getShadow(),
+            fullWidth && styles.fullWidth,
+          ]}
+        >
+          {buttonContent}
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  }
+
   return (
     <TouchableOpacity
       onPress={handlePress}
       disabled={disabled || loading}
-      activeOpacity={0.7}
+      activeOpacity={0.85}
       style={[
         styles.button,
         {
@@ -109,43 +172,40 @@ export function Button({
           borderWidth: variant === 'outline' ? 2 : 0,
           ...getPadding(),
         },
+        getShadow(),
         fullWidth && styles.fullWidth,
         style,
       ]}
     >
-      {loading ? (
-        <ActivityIndicator color={getTextColor()} size="small" />
-      ) : (
-        <>
-          {icon}
-          <Text
-            style={[
-              styles.text,
-              { color: getTextColor(), fontSize: getFontSize() },
-              icon ? { marginLeft: 8 } : {},
-              textStyle,
-            ]}
-          >
-            {title}
-          </Text>
-        </>
-      )}
+      {buttonContent}
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   button: {
-    borderRadius: 12,
+    borderRadius: BORDER_RADIUS.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 44,
+    minHeight: 48,
   },
   fullWidth: {
     width: '100%',
   },
+  contentContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   text: {
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  iconLeft: {
+    marginRight: 10,
+  },
+  iconRight: {
+    marginLeft: 10,
   },
 });

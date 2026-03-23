@@ -1,4 +1,4 @@
-// Login Screen
+// Login Screen - Modern UI
 import React, { useState } from 'react';
 import {
   View,
@@ -14,10 +14,11 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Input } from '../../src/components';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useLanguage } from '../../src/contexts/LanguageContext';
-import { COLORS } from '../../src/utils/constants';
+import { COLORS, SHADOWS, BORDER_RADIUS } from '../../src/utils/constants';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -52,6 +53,14 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Background gradient */}
+      <LinearGradient
+        colors={['rgba(0, 214, 143, 0.06)', 'transparent']}
+        style={styles.backgroundGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      />
+      
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -112,6 +121,7 @@ export default function LoginScreen() {
               loading={isLoading}
               fullWidth
               size="large"
+              variant="gradient"
             />
 
           </View>
@@ -133,6 +143,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  backgroundGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+  },
   keyboardView: {
     flex: 1,
   },
@@ -142,25 +159,22 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 48,
+    height: 48,
+    borderRadius: BORDER_RADIUS.lg,
     backgroundColor: COLORS.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
-  },
-  header: {
-    alignItems: 'center',
-    marginVertical: 24,
+    ...SHADOWS.small,
   },
   header: {
     alignItems: 'center',
     marginVertical: 24,
   },
   logoImage: {
-    width: 100,
-    height: 100,
+    width: 90,
+    height: 90,
     marginBottom: 8,
   },
   logoText: {
@@ -168,11 +182,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.primary,
     marginTop: 8,
+    letterSpacing: 0.3,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '800',
     color: COLORS.text,
+    marginTop: 16,
     marginBottom: 8,
   },
   subtitle: {
@@ -183,38 +199,28 @@ const styles = StyleSheet.create({
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.error + '20',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 16,
+    backgroundColor: COLORS.error + '15',
+    padding: 16,
+    borderRadius: BORDER_RADIUS.lg,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: COLORS.error + '30',
   },
   errorText: {
     color: COLORS.error,
-    marginLeft: 8,
+    marginLeft: 10,
     flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
   },
   form: {
     flex: 1,
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: COLORS.border,
-  },
-  dividerText: {
-    color: COLORS.textMuted,
-    marginHorizontal: 16,
-    fontSize: 14,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 24,
+    paddingVertical: 16,
   },
   footerText: {
     color: COLORS.textSecondary,
@@ -223,6 +229,6 @@ const styles = StyleSheet.create({
   footerLink: {
     color: COLORS.primary,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

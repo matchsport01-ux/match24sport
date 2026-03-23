@@ -1,34 +1,87 @@
-// Match Sport 24 Constants
+// Match Sport 24 Constants - Modern UI Theme
 
 export const COLORS = {
-  primary: '#10B981',      // Green - sporty
-  primaryDark: '#059669',
-  secondary: '#3B82F6',    // Blue - trust
-  secondaryDark: '#2563EB',
-  accent: '#F59E0B',       // Orange - energy
-  accentDark: '#D97706',
+  // Primary palette - Vibrant green
+  primary: '#00D68F',
+  primaryDark: '#00B377',
+  primaryLight: '#33E0A5',
   
-  background: '#0F172A',   // Dark slate
-  surface: '#1E293B',      // Slate
-  surfaceLight: '#334155',
+  // Secondary palette - Electric blue
+  secondary: '#4F8CFF',
+  secondaryDark: '#3D7BE8',
+  secondaryLight: '#7AABFF',
   
-  text: '#F8FAFC',         // White/light
-  textSecondary: '#94A3B8',
-  textMuted: '#64748B',
+  // Accent - Warm orange
+  accent: '#FF9F43',
+  accentDark: '#E88E35',
+  accentLight: '#FFB56A',
   
-  success: '#22C55E',
-  warning: '#F59E0B',
-  error: '#EF4444',
-  info: '#3B82F6',
+  // Background - Deep dark with blue tint
+  background: '#0A0E21',
+  surface: '#151A30',
+  surfaceLight: '#1F2545',
+  surfaceElevated: '#252D50',
   
-  border: '#334155',
-  divider: '#1E293B',
+  // Text hierarchy
+  text: '#FFFFFF',
+  textSecondary: '#A4B0CC',
+  textMuted: '#6B7999',
   
-  // Sport colors
-  padel: '#10B981',
-  tennis: '#F59E0B',
-  calcetto: '#3B82F6',
-  calcio8: '#8B5CF6',  // Purple for Calcio a 8
+  // Status colors
+  success: '#00D68F',
+  warning: '#FFAA00',
+  error: '#FF4D6A',
+  info: '#4F8CFF',
+  
+  // Borders & dividers
+  border: '#2A3352',
+  divider: '#1F2545',
+  
+  // Glass effect
+  glass: 'rgba(255, 255, 255, 0.08)',
+  glassBorder: 'rgba(255, 255, 255, 0.12)',
+  
+  // Sport colors - More vibrant
+  padel: '#00D68F',
+  tennis: '#FFAA00',
+  calcetto: '#4F8CFF',
+  calcio8: '#A855F7',
+  
+  // Gradient stops
+  gradientStart: '#00D68F',
+  gradientEnd: '#00B377',
+};
+
+// Shadows for elevated components
+export const SHADOWS = {
+  small: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  medium: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  large: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  glow: (color: string) => ({
+    shadowColor: color,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
+  }),
 };
 
 export const SPORTS = [
@@ -56,6 +109,23 @@ export const MATCH_FORMATS = {
 export const SUBSCRIPTION_PLANS = {
   monthly: { name: 'Mensile', price: 49.99, duration: 30 },
   yearly: { name: 'Annuale', price: 399.99, duration: 365 },
+};
+
+export const SPACING = {
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+  xxl: 48,
+};
+
+export const BORDER_RADIUS = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+  full: 9999,
 };
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';

@@ -1,10 +1,11 @@
-// Match Card Component
+// Match Card Component - Modern UI
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Card } from './Card';
 import { SportBadge } from './SportBadge';
-import { COLORS } from '../utils/constants';
+import { COLORS, SHADOWS, BORDER_RADIUS } from '../utils/constants';
 import { Match } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 import { format, parseISO } from 'date-fns';
@@ -38,6 +39,7 @@ export function MatchCard({ match, onPress }: MatchCardProps) {
 
   const spotsLeft = match.max_players - match.current_players;
   const isFull = spotsLeft <= 0;
+  const fillPercentage = (match.current_players / match.max_players) * 100;
 
   const getStatusColor = () => {
     switch (match.status) {
@@ -45,6 +47,16 @@ export function MatchCard({ match, onPress }: MatchCardProps) {
       case 'completed': return COLORS.textMuted;
       case 'cancelled': return COLORS.error;
       default: return COLORS.success;
+    }
+  };
+
+  const getSportColor = () => {
+    switch (match.sport) {
+      case 'padel': return COLORS.padel;
+      case 'tennis': return COLORS.tennis;
+      case 'calcetto': return COLORS.calcetto;
+      case 'calcio8': return COLORS.calcio8;
+      default: return COLORS.primary;
     }
   };
 
@@ -57,54 +69,90 @@ export function MatchCard({ match, onPress }: MatchCardProps) {
     }
   };
 
+  const sportColor = getSportColor();
+
   return (
-    <Card onPress={onPress} style={styles.card}>
-      <View style={styles.header}>
-        <SportBadge sport={match.sport} size="small" />
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor() + '20' }]}>
-          <View style={[styles.statusDot, { backgroundColor: getStatusColor() }]} />
-          <Text style={[styles.statusText, { color: getStatusColor() }]}>
-            {isFull ? t('full') : `${spotsLeft} ${t('spots_available')}`}
-          </Text>
+    <Card onPress={onPress} variant="elevated" style={styles.card}>
+      {/* Top accent line */}
+      <View style={[styles.accentLine, { backgroundColor: sportColor }]} />
+      
+      <View style={styles.content}>
+        {/* Header */}
+        <View style={styles.header}>
+          <SportBadge sport={match.sport} size="small" />
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor() + '20' }]}>
+            <View style={[styles.statusDot, { backgroundColor: getStatusColor() }]} />
+            <Text style={[styles.statusText, { color: getStatusColor() }]}>
+              {isFull ? t('full') : `${spotsLeft} ${t('spots_available')}`}
+            </Text>
+          </View>
         </View>
-      </View>
 
-      <Text style={styles.clubName}>{match.club_name}</Text>
+        {/* Club name */}
+        <Text style={styles.clubName} numberOfLines={1}>{match.club_name}</Text>
 
-      <View style={styles.infoRow}>
-        <View style={styles.infoItem}>
-          <Ionicons name="calendar-outline" size={16} color={COLORS.textSecondary} />
-          <Text style={styles.infoText}>{formatDate(match.date)}</Text>
+        {/* Info grid */}
+        <View style={styles.infoGrid}>
+          <View style={styles.infoItem}>
+            <View style={[styles.infoIconContainer, { backgroundColor: COLORS.secondary + '20' }]}>
+              <Ionicons name="calendar-outline" size={16} color={COLORS.secondary} />
+            </View>
+            <Text style={styles.infoText}>{formatDate(match.date)}</Text>
+          </View>
+          <View style={styles.infoItem}>
+            <View style={[styles.infoIconContainer, { backgroundColor: COLORS.accent + '20' }]}>
+              <Ionicons name="time-outline" size={16} color={COLORS.accent} />
+            </View>
+            <Text style={styles.infoText}>{match.start_time}</Text>
+          </View>
         </View>
-        <View style={styles.infoItem}>
-          <Ionicons name="time-outline" size={16} color={COLORS.textSecondary} />
-          <Text style={styles.infoText}>{match.start_time} - {match.end_time}</Text>
-        </View>
-      </View>
 
-      <View style={styles.infoRow}>
-        <View style={styles.infoItem}>
-          <Ionicons name="location-outline" size={16} color={COLORS.textSecondary} />
-          <Text style={styles.infoText}>{match.club_city}</Text>
+        <View style={styles.infoGrid}>
+          <View style={styles.infoItem}>
+            <View style={[styles.infoIconContainer, { backgroundColor: COLORS.error + '20' }]}>
+              <Ionicons name="location-outline" size={16} color={COLORS.error} />
+            </View>
+            <Text style={styles.infoText} numberOfLines={1}>{match.club_city}</Text>
+          </View>
+          <View style={styles.infoItem}>
+            <View style={[styles.infoIconContainer, { backgroundColor: COLORS.calcio8 + '20' }]}>
+              <Ionicons name="trophy-outline" size={16} color={COLORS.calcio8} />
+            </View>
+            <Text style={styles.infoText}>{getLevelLabel()}</Text>
+          </View>
         </View>
-        <View style={styles.infoItem}>
-          <Ionicons name="trophy-outline" size={16} color={COLORS.textSecondary} />
-          <Text style={styles.infoText}>{getLevelLabel()}</Text>
-        </View>
-      </View>
 
-      <View style={styles.footer}>
-        <View style={styles.participants}>
-          <Ionicons name="people-outline" size={18} color={COLORS.primary} />
-          <Text style={styles.participantsText}>
+        {/* Progress bar */}
+        <View style={styles.progressContainer}>
+          <View style={styles.progressBar}>
+            <LinearGradient
+              colors={[sportColor, sportColor + 'CC']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[styles.progressFill, { width: `${fillPercentage}%` }]}
+            />
+          </View>
+          <Text style={styles.progressText}>
             {match.current_players}/{match.max_players}
           </Text>
         </View>
-        <Text style={styles.price}>
-          {match.price_per_player > 0
-            ? `€${match.price_per_player.toFixed(2)}`
-            : t('free')}
-        </Text>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <View style={styles.participants}>
+            <Ionicons name="people" size={18} color={sportColor} />
+            <Text style={[styles.participantsText, { color: sportColor }]}>
+              {match.current_players} iscritti
+            </Text>
+          </View>
+          <View style={[styles.priceTag, { backgroundColor: sportColor + '20' }]}>
+            <Text style={[styles.price, { color: sportColor }]}>
+              {match.price_per_player > 0
+                ? `€${match.price_per_player.toFixed(0)}`
+                : t('free')}
+            </Text>
+          </View>
+        </View>
       </View>
     </Card>
   );
@@ -112,7 +160,16 @@ export function MatchCard({ match, onPress }: MatchCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    marginBottom: 12,
+    marginBottom: 16,
+    padding: 0,
+    overflow: 'hidden',
+  },
+  accentLine: {
+    height: 4,
+    width: '100%',
+  },
+  content: {
+    padding: 16,
   },
   header: {
     flexDirection: 'row',
@@ -123,9 +180,9 @@ const styles = StyleSheet.create({
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: BORDER_RADIUS.full,
   },
   statusDot: {
     width: 6,
@@ -135,33 +192,65 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   clubName: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: COLORS.text,
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  infoRow: {
+  infoGrid: {
     flexDirection: 'row',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   infoItem: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
+  infoIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: BORDER_RADIUS.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
   infoText: {
     fontSize: 14,
     color: COLORS.textSecondary,
-    marginLeft: 6,
+    flex: 1,
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  progressBar: {
+    flex: 1,
+    height: 6,
+    backgroundColor: COLORS.surfaceLight,
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginRight: 12,
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  progressText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    minWidth: 40,
+    textAlign: 'right',
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
@@ -171,14 +260,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   participantsText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    color: COLORS.primary,
-    marginLeft: 6,
+    marginLeft: 8,
+  },
+  priceTag: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: BORDER_RADIUS.full,
   },
   price: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    color: COLORS.text,
   },
 });
