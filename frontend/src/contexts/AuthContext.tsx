@@ -4,7 +4,6 @@ import { apiClient } from '../api/client';
 import { User } from '../types';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
-import { pushNotificationService } from '../services/pushNotifications';
 
 interface AuthContextType {
   user: User | null;
@@ -22,57 +21,97 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const refreshUser = useCallback(async () => {
     try {
       const userData = await apiClient.getMe();
       setUser(userData);
     } catch (error) {
+      console.log('RefreshUser error (expected if not logged in):', error);
       setUser(null);
     }
   }, []);
 
-  const checkAuth = useCallback(async () => {
-    // Add timeout to prevent infinite loading
-    const timeout = setTimeout(() => {
-      console.log('Auth check timeout - setting loading to false');
-      setIsLoading(false);
-    }, 5000);
-
-    try {
-      // Check for existing token
-      let token: string | null = null;
-      if (Platform.OS === 'web') {
-        token = localStorage.getItem('auth_token');
-      } else {
-        token = await SecureStore.getItemAsync('auth_token');
-      }
-
-      if (token) {
-        await refreshUser();
-      }
-    } catch (error) {
-      console.log('Auth check error:', error);
-    } finally {
-      clearTimeout(timeout);
-      setIsLoading(false);
-    }
-  }, [refreshUser]);
-
+  // Initialize auth on mount - runs only once
   useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
-
-  // Register for push notifications when user is authenticated
-  useEffect(() => {
-    if (user) {
-      pushNotificationService.registerTokenWithBackend();
-      pushNotificationService.setupNotificationListeners();
-    }
+    if (isInitialized) return;
     
-    return () => {
-      pushNotificationService.removeListeners();
+    let isMounted = true;
+    
+    const initAuth = async () => {
+      // Immediate timeout fallback - never wait more than 3 seconds
+      const timeout = setTimeout(() => {
+        if (isMounted) {
+          console.log('[Auth] Timeout reached - forcing loading complete');
+          setIsLoading(false);
+          setIsInitialized(true);
+        }
+      }, 3000);
+
+      try {
+        // Check for existing token
+        let token: string | null = null;
+        
+        if (Platform.OS === 'web') {
+          try {
+            token = localStorage.getItem('auth_token');
+          } catch (e) {
+            console.log('[Auth] localStorage not available');
+          }
+        } else {
+          try {
+            token = await SecureStore.getItemAsync('auth_token');
+          } catch (e) {
+            console.log('[Auth] SecureStore error:', e);
+          }
+        }
+
+        if (token && isMounted) {
+          try {
+            await refreshUser();
+          } catch (e) {
+            console.log('[Auth] Refresh user failed:', e);
+          }
+        }
+      } catch (error) {
+        console.log('[Auth] Init error:', error);
+      } finally {
+        clearTimeout(timeout);
+        if (isMounted) {
+          setIsLoading(false);
+          setIsInitialized(true);
+        }
+      }
     };
+
+    initAuth();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isInitialized, refreshUser]);
+
+  // Setup push notifications only on native platforms and when user is logged in
+  useEffect(() => {
+    if (!user || Platform.OS === 'web') return;
+    
+    // Lazy load push notification service only when needed
+    const setupPushNotifications = async () => {
+      try {
+        const { pushNotificationService } = await import('../services/pushNotifications');
+        pushNotificationService.registerTokenWithBackend();
+        pushNotificationService.setupNotificationListeners();
+        
+        return () => {
+          pushNotificationService.removeListeners();
+        };
+      } catch (error) {
+        console.log('[Auth] Push notifications not available:', error);
+      }
+    };
+    
+    setupPushNotifications();
   }, [user]);
 
   const login = async (email: string, password: string) => {
