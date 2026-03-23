@@ -55,23 +55,30 @@ export default function LoginScreen() {
     try {
       setError('');
       console.log('[Login] Attempting login for:', email);
-      const result = await login(email, password);
+      await login(email, password);
       console.log('[Login] Login successful');
       
-      // Navigate immediately after login
-      // Get user from result or refetch
-      const userData = await apiClient.getMe();
-      console.log('[Login] User data:', userData?.role);
-      
-      if (userData) {
-        if (userData.role === 'super_admin') {
-          router.replace('/admin/dashboard');
-        } else if (userData.role === 'club_admin') {
-          router.replace('/club/dashboard');
-        } else {
+      // Small delay then navigate
+      setTimeout(async () => {
+        try {
+          const userData = await apiClient.getMe();
+          console.log('[Login] User data:', userData?.role);
+          
+          if (userData) {
+            if (userData.role === 'super_admin') {
+              router.replace('/admin/dashboard');
+            } else if (userData.role === 'club_admin') {
+              router.replace('/club/dashboard');
+            } else {
+              router.replace('/player/home');
+            }
+          }
+        } catch (navErr) {
+          console.error('[Login] Navigation error:', navErr);
+          // Fallback navigation
           router.replace('/player/home');
         }
-      }
+      }, 200);
     } catch (err: any) {
       console.error('[Login] Login failed:', err?.message || err);
       const errorMessage = err.response?.data?.detail || 
