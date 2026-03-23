@@ -297,6 +297,19 @@ export default function ClubDashboardScreen() {
             </View>
             <Text style={styles.actionText}>Le Partite</Text>
           </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => {
+              lightHaptic();
+              router.push('/club/pending-results');
+            }}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: COLORS.info + '20' }]}>
+              <Ionicons name="trophy-outline" size={24} color={COLORS.info} />
+            </View>
+            <Text style={styles.actionText}>Conferma Risultati</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Upcoming Matches */}
