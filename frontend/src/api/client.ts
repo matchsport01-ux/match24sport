@@ -4,26 +4,16 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
-// Get backend URL with multiple fallbacks for production reliability
+// PRODUCTION BACKEND URL - HARDCODED FOR RELIABILITY
+// This URL must ALWAYS point to the working backend
+const PRODUCTION_BACKEND_URL = 'https://padel-finder-app.preview.emergentagent.com';
+
+// Get backend URL - prioritize hardcoded production URL for App Store builds
 const getBackendUrl = (): string => {
-  // First try environment variable (set during build)
-  const envUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
-  if (envUrl && envUrl.trim() !== '') {
-    console.log('[APIClient] Using EXPO_PUBLIC_BACKEND_URL:', envUrl);
-    return envUrl;
-  }
-  
-  // Fallback to app.json extra config
-  const extraUrl = Constants.expoConfig?.extra?.backendUrl;
-  if (extraUrl && extraUrl.trim() !== '') {
-    console.log('[APIClient] Using app.json extra.backendUrl:', extraUrl);
-    return extraUrl;
-  }
-  
-  // Hardcoded fallback as last resort for production builds
-  const fallbackUrl = 'https://padel-finder-app.preview.emergentagent.com';
-  console.log('[APIClient] Using hardcoded fallback URL:', fallbackUrl);
-  return fallbackUrl;
+  // ALWAYS use the hardcoded production URL first - most reliable
+  // This ensures the App Store build ALWAYS works
+  console.log('[APIClient] Using PRODUCTION_BACKEND_URL:', PRODUCTION_BACKEND_URL);
+  return PRODUCTION_BACKEND_URL;
 };
 
 const API_BASE_URL = getBackendUrl();
