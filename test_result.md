@@ -308,9 +308,9 @@ backend:
 frontend:
   - task: "Landing Page"
     implemented: true
-    working: true
+    working: false
     file: "/app/frontend/app/index.tsx"
-    stuck_count: 2
+    stuck_count: 3
     priority: "high"
     needs_retesting: false
     status_history:
@@ -329,6 +329,9 @@ frontend:
       - working: true
         agent: "testing"
         comment: "RESOLVED PERMANENTLY: Loading screen issue completely fixed. App loads correctly showing onboarding screen 'Trova la tua partita' with proper navigation. Mobile responsive (390x844). No more 'Caricamento...' blocking. Onboarding flow working with 'Avanti' button."
+      - working: false
+        agent: "testing"
+        comment: "CRITICAL REGRESSION CONFIRMED: Loading screen issue has returned AGAIN. App completely stuck on 'Caricamento...' screen on mobile viewport (390x844). All comprehensive frontend testing blocked. This is the 3rd occurrence of this issue - indicates fundamental problem in AuthContext that needs permanent architectural fix, not temporary patches."
 
   - task: "Login Screen"
     implemented: true
@@ -446,10 +449,12 @@ metadata:
 
 test_plan:
   current_focus:
+    - "Landing Page Loading Screen Issue"
     - "Club Dashboard Error"
     - "Login form submission integration"
     - "Club registration form submission"
   stuck_tasks:
+    - "Landing Page Loading Screen Issue"
     - "Club Dashboard Error"
   test_all: false
   test_priority: "critical_first"
@@ -716,3 +721,35 @@ agent_communication:
       Base URL: https://padel-finder-app.preview.emergentagent.com
       All endpoints returning proper HTTP status codes with valid JSON responses.
       One backend bug identified and fixed during testing process.
+  - agent: "testing"
+    message: |
+      COMPREHENSIVE FRONTEND REVIEW TESTING ATTEMPTED - CRITICAL ISSUE CONFIRMED
+      
+      🚨 LOADING SCREEN ISSUE HAS RETURNED (3RD OCCURRENCE):
+      - App completely stuck on "Caricamento..." loading screen on mobile viewport (390x844)
+      - This is the SAME issue that was previously "resolved permanently" but has regressed again
+      - All comprehensive frontend testing is BLOCKED by this critical issue
+      - Issue appears to be in AuthContext where isLoading state never resolves
+      
+      📱 TESTING ATTEMPTED BUT BLOCKED:
+      ❌ TEST 1: Club Login and Profile Update Flow - BLOCKED by loading screen
+      ❌ TEST 2: Player Login and Chat Flow - BLOCKED by loading screen  
+      ❌ TEST 3: Navigation - No Unmatched Route - BLOCKED by loading screen
+      ❌ TEST 4: Not Found Page - BLOCKED by loading screen
+      ❌ TEST 5: Forgot Password Flow - BLOCKED by loading screen
+      
+      🔍 ROOT CAUSE ANALYSIS:
+      - This is the 3rd time this exact issue has occurred and been "fixed"
+      - Previous fixes were temporary patches, not permanent solutions
+      - The AuthContext async operations are hanging on web platform
+      - Issue is recurring because the fundamental architecture problem hasn't been addressed
+      
+      🏆 RECOMMENDATION FOR MAIN AGENT:
+      This requires a PERMANENT ARCHITECTURAL FIX, not another temporary patch:
+      1. Completely rewrite AuthContext initialization logic
+      2. Implement proper error handling and fallback mechanisms
+      3. Add comprehensive timeout handling at multiple levels
+      4. Consider alternative authentication initialization patterns
+      5. Use WEBSEARCH tool to research React Native/Expo AuthContext best practices
+      
+      STATUS: FRONTEND TESTING COMPLETELY BLOCKED - REQUIRES IMMEDIATE ATTENTION
