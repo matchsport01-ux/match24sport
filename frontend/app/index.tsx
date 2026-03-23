@@ -1,15 +1,14 @@
-// Main Entry Screen - Landing/Auth Check - Modern UI
+// Main Entry Screen - Landing/Auth Check - Stable Version
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Image, Dimensions, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Button } from '../src/components';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useLanguage } from '../src/contexts/LanguageContext';
-import { COLORS, SPORTS, SHADOWS, BORDER_RADIUS } from '../src/utils/constants';
+import { COLORS, SPORTS } from '../src/utils/constants';
 import { LoadingSpinner } from '../src/components/LoadingSpinner';
 
 const { width, height } = Dimensions.get('window');
@@ -21,7 +20,6 @@ export default function Index() {
   const [forceShow, setForceShow] = useState(false);
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
-  // Check onboarding status
   useEffect(() => {
     const checkOnboarding = async () => {
       try {
@@ -38,7 +36,6 @@ export default function Index() {
     checkOnboarding();
   }, [isAuthenticated]);
 
-  // Force show content after 3 seconds to prevent infinite loading
   useEffect(() => {
     const timer = setTimeout(() => {
       setForceShow(true);
@@ -49,7 +46,6 @@ export default function Index() {
   const isLoading = (authLoading || checkingOnboarding) && !forceShow;
 
   useEffect(() => {
-    // Check URL for session_id (Google OAuth callback)
     if (Platform.OS === 'web') {
       const hash = window.location.hash;
       if (hash && hash.includes('session_id=')) {
@@ -58,7 +54,6 @@ export default function Index() {
       }
     }
 
-    // Redirect based on auth status
     if (!isLoading && isAuthenticated && user) {
       if (user.role === 'super_admin') {
         router.replace('/admin/dashboard');
@@ -76,14 +71,6 @@ export default function Index() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Background gradient overlay */}
-      <LinearGradient
-        colors={['rgba(0, 214, 143, 0.08)', 'transparent', 'rgba(79, 140, 255, 0.05)']}
-        style={styles.backgroundGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      />
-      
       <View style={styles.header}>
         <Image
           source={{ uri: 'https://customer-assets.emergentagent.com/job_padel-finder-app/artifacts/np98g9bo_logo%20pagna%20benvenuto.png' }}
@@ -96,37 +83,31 @@ export default function Index() {
       <View style={styles.heroSection}>
         <Text style={styles.heroTitle}>{t('welcome')}</Text>
         <Text style={styles.heroSubtitle}>
-          Trova e prenota partite di Padel, Tennis, Calcetto e Calcio a 8 nella tua città
+          Trova e prenota partite di Padel, Tennis, Calcetto e Calcio a 8 nella tua citt\u00e0
         </Text>
 
         <View style={styles.sportsRow}>
           {SPORTS.map((sport) => (
-            <View key={sport.id} style={[styles.sportItem, { borderColor: sport.color }]}>
-              <LinearGradient
-                colors={[sport.color + '30', sport.color + '10']}
-                style={styles.sportGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <Ionicons
-                  name={sport.id === 'calcetto' || sport.id === 'calcio8' ? 'football-outline' : 'tennisball-outline'}
-                  size={20}
-                  color={sport.color}
-                />
-                <Text style={[styles.sportName, { color: sport.color }]}>{sport.name}</Text>
-              </LinearGradient>
+            <View key={sport.id} style={[styles.sportItem, { backgroundColor: sport.color + '20' }]}>
+              <Ionicons
+                name={sport.id === 'calcetto' || sport.id === 'calcio8' ? 'football-outline' : 'tennisball-outline'}
+                size={24}
+                color={sport.color}
+              />
+              <Text style={[styles.sportName, { color: sport.color }]}>{sport.name}</Text>
             </View>
-          ))}        </View>
+          ))}
+        </View>
       </View>
 
       <View style={styles.ctaSection}>
         <Button
           title={t('register_as_player')}
           onPress={() => router.push('/auth/register')}
-          variant="gradient"
+          variant="primary"
           size="large"
           fullWidth
-          icon={<Ionicons name="person-outline" size={20} color="#FFF" />}
+          icon={<Ionicons name="person-outline" size={20} color={COLORS.text} />}
         />
 
         <Button
@@ -156,21 +137,15 @@ export default function Index() {
 
       <View style={styles.features}>
         <View style={styles.featureItem}>
-          <View style={[styles.featureIcon, { backgroundColor: COLORS.primary + '20' }]}>
-            <Ionicons name="search-outline" size={22} color={COLORS.primary} />
-          </View>
+          <Ionicons name="search-outline" size={24} color={COLORS.primary} />
           <Text style={styles.featureText}>Trova partite</Text>
         </View>
         <View style={styles.featureItem}>
-          <View style={[styles.featureIcon, { backgroundColor: COLORS.secondary + '20' }]}>
-            <Ionicons name="chatbubbles-outline" size={22} color={COLORS.secondary} />
-          </View>
+          <Ionicons name="chatbubbles-outline" size={24} color={COLORS.secondary} />
           <Text style={styles.featureText}>Chat di gruppo</Text>
         </View>
         <View style={styles.featureItem}>
-          <View style={[styles.featureIcon, { backgroundColor: COLORS.accent + '20' }]}>
-            <Ionicons name="trophy-outline" size={22} color={COLORS.accent} />
-          </View>
+          <Ionicons name="trophy-outline" size={24} color={COLORS.accent} />
           <Text style={styles.featureText}>Rating ELO</Text>
         </View>
       </View>
@@ -184,13 +159,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
     paddingHorizontal: 24,
   },
-  backgroundGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
   header: {
     paddingVertical: 16,
     alignItems: 'center',
@@ -200,58 +168,51 @@ const styles = StyleSheet.create({
     height: 100,
   },
   logoText: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '800',
     color: COLORS.text,
     marginTop: 8,
-    letterSpacing: 0.5,
   },
   heroSection: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: 32,
   },
   heroTitle: {
-    fontSize: 38,
+    fontSize: 36,
     fontWeight: '800',
     color: COLORS.text,
     textAlign: 'center',
     marginBottom: 12,
-    letterSpacing: -0.5,
   },
   heroSubtitle: {
-    fontSize: 17,
+    fontSize: 18,
     color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 26,
     marginBottom: 32,
-    paddingHorizontal: 8,
   },
   sportsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 12,
   },
   sportItem: {
-    borderRadius: BORDER_RADIUS.full,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  sportGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 10,
+    borderRadius: 24,
   },
   sportName: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
   },
   ctaSection: {
-    paddingBottom: 20,
+    paddingBottom: 24,
   },
   secondaryButton: {
     marginTop: 12,
@@ -281,17 +242,9 @@ const styles = StyleSheet.create({
   featureItem: {
     alignItems: 'center',
   },
-  featureIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: BORDER_RADIUS.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
   featureText: {
     fontSize: 12,
     color: COLORS.textSecondary,
-    fontWeight: '500',
+    marginTop: 6,
   },
 });

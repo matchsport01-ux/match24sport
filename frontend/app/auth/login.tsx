@@ -1,5 +1,5 @@
-// Login Screen - Modern UI
-import React, { useState } from 'react';
+// Login Screen - Stable Version
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,26 +8,43 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
   Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Input } from '../../src/components';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useLanguage } from '../../src/contexts/LanguageContext';
-import { COLORS, SHADOWS, BORDER_RADIUS } from '../../src/utils/constants';
+import { COLORS } from '../../src/utils/constants';
+import { apiClient } from '../../src/api/client';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, isLoading } = useAuth();
+  const { login, isLoading, isAuthenticated, user } = useAuth();
   const { t } = useLanguage();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+
+  // Navigate after successful login
+  useEffect(() => {
+    console.log('[Login useEffect] isAuthenticated:', isAuthenticated, 'user:', user?.email);
+    if (isAuthenticated && user) {
+      console.log('[Login] User authenticated, navigating to:', user.role);
+      // Use setTimeout to ensure state is fully updated
+      setTimeout(() => {
+        if (user.role === 'super_admin') {
+          router.push('/admin/dashboard');
+        } else if (user.role === 'club_admin') {
+          router.push('/club/dashboard');
+        } else {
+          router.push('/player/home');
+        }
+      }, 100);
+    }
+  }, [isAuthenticated, user]);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -38,12 +55,25 @@ export default function LoginScreen() {
     try {
       setError('');
       console.log('[Login] Attempting login for:', email);
-      await login(email, password);
+      const result = await login(email, password);
       console.log('[Login] Login successful');
-      // Navigation will be handled by auth context
+      
+      // Navigate immediately after login
+      // Get user from result or refetch
+      const userData = await apiClient.getMe();
+      console.log('[Login] User data:', userData?.role);
+      
+      if (userData) {
+        if (userData.role === 'super_admin') {
+          router.replace('/admin/dashboard');
+        } else if (userData.role === 'club_admin') {
+          router.replace('/club/dashboard');
+        } else {
+          router.replace('/player/home');
+        }
+      }
     } catch (err: any) {
       console.error('[Login] Login failed:', err?.message || err);
-      console.error('[Login] Error response:', JSON.stringify(err?.response?.data));
       const errorMessage = err.response?.data?.detail || 
                           err.message || 
                           'Errore di connessione. Riprova.';
@@ -53,14 +83,6 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Background gradient */}
-      <LinearGradient
-        colors={['rgba(0, 214, 143, 0.06)', 'transparent']}
-        style={styles.backgroundGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      />
-      
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -108,7 +130,7 @@ export default function LoginScreen() {
 
             <Input
               label={t('password')}
-              placeholder="••••••••"
+              placeholder="Password"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -121,9 +143,7 @@ export default function LoginScreen() {
               loading={isLoading}
               fullWidth
               size="large"
-              variant="gradient"
             />
-
           </View>
 
           <View style={styles.footer}>
@@ -143,13 +163,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  backgroundGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: '50%',
-  },
   keyboardView: {
     flex: 1,
   },
@@ -159,14 +172,13 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   backButton: {
-    width: 48,
-    height: 48,
-    borderRadius: BORDER_RADIUS.lg,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     backgroundColor: COLORS.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
-    ...SHADOWS.small,
   },
   header: {
     alignItems: 'center',
@@ -182,10 +194,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.primary,
     marginTop: 8,
-    letterSpacing: 0.3,
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '800',
     color: COLORS.text,
     marginTop: 16,
@@ -199,19 +210,15 @@ const styles = StyleSheet.create({
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.error + '15',
-    padding: 16,
-    borderRadius: BORDER_RADIUS.lg,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: COLORS.error + '30',
+    backgroundColor: COLORS.error + '20',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 16,
   },
   errorText: {
     color: COLORS.error,
-    marginLeft: 10,
+    marginLeft: 8,
     flex: 1,
-    fontSize: 14,
-    fontWeight: '500',
   },
   form: {
     flex: 1,
@@ -220,7 +227,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 24,
-    paddingVertical: 16,
   },
   footerText: {
     color: COLORS.textSecondary,
@@ -229,6 +235,6 @@ const styles = StyleSheet.create({
   footerLink: {
     color: COLORS.primary,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
   },
 });

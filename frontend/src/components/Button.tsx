@@ -1,4 +1,4 @@
-// Button Component - Modern UI
+// Button Component - Stable Version
 import React from 'react';
 import {
   TouchableOpacity,
@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, SHADOWS, BORDER_RADIUS } from '../utils/constants';
+import { COLORS } from '../utils/constants';
 import { mediumHaptic } from '../utils/haptics';
 
 interface ButtonProps {
@@ -86,9 +86,9 @@ export function Button({
       case 'small':
         return { paddingVertical: 10, paddingHorizontal: 18 };
       case 'large':
-        return { paddingVertical: 18, paddingHorizontal: 36 };
+        return { paddingVertical: 16, paddingHorizontal: 32 };
       default:
-        return { paddingVertical: 14, paddingHorizontal: 28 };
+        return { paddingVertical: 14, paddingHorizontal: 24 };
     }
   };
 
@@ -97,18 +97,10 @@ export function Button({
       case 'small':
         return 14;
       case 'large':
-        return 18;
+        return 17;
       default:
         return 16;
     }
-  };
-
-  const getShadow = () => {
-    if (disabled || variant === 'ghost' || variant === 'outline') return {};
-    if (variant === 'gradient' || variant === 'primary') {
-      return SHADOWS.glow(COLORS.primary);
-    }
-    return SHADOWS.medium;
   };
 
   const buttonContent = (
@@ -139,7 +131,7 @@ export function Button({
       <TouchableOpacity
         onPress={handlePress}
         disabled={disabled || loading}
-        activeOpacity={0.85}
+        activeOpacity={0.8}
         style={[fullWidth && styles.fullWidth, style]}
       >
         <LinearGradient
@@ -149,7 +141,6 @@ export function Button({
           style={[
             styles.button,
             getPadding(),
-            getShadow(),
             fullWidth && styles.fullWidth,
           ]}
         >
@@ -163,7 +154,7 @@ export function Button({
     <TouchableOpacity
       onPress={handlePress}
       disabled={disabled || loading}
-      activeOpacity={0.85}
+      activeOpacity={0.8}
       style={[
         styles.button,
         {
@@ -172,7 +163,6 @@ export function Button({
           borderWidth: variant === 'outline' ? 2 : 0,
           ...getPadding(),
         },
-        getShadow(),
         fullWidth && styles.fullWidth,
         style,
       ]}
@@ -184,7 +174,7 @@ export function Button({
 
 const styles = StyleSheet.create({
   button: {
-    borderRadius: BORDER_RADIUS.lg,
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -199,13 +189,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   text: {
-    fontWeight: '700',
-    letterSpacing: 0.3,
+    fontWeight: '600',
   },
   iconLeft: {
-    marginRight: 10,
+    marginRight: 8,
   },
   iconRight: {
-    marginLeft: 10,
+    marginLeft: 8,
   },
 });

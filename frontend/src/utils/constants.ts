@@ -1,4 +1,4 @@
-// Match Sport 24 Constants - Modern UI Theme
+// Match Sport 24 Constants - Stable Modern Theme
 
 export const COLORS = {
   // Primary palette - Vibrant green
@@ -46,42 +46,6 @@ export const COLORS = {
   tennis: '#FFAA00',
   calcetto: '#4F8CFF',
   calcio8: '#A855F7',
-  
-  // Gradient stops
-  gradientStart: '#00D68F',
-  gradientEnd: '#00B377',
-};
-
-// Shadows for elevated components
-export const SHADOWS = {
-  small: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  medium: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  large: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 12,
-  },
-  glow: (color: string) => ({
-    shadowColor: color,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
-  }),
 };
 
 export const SPORTS = [
@@ -109,15 +73,6 @@ export const MATCH_FORMATS = {
 export const SUBSCRIPTION_PLANS = {
   monthly: { name: 'Mensile', price: 49.99, duration: 30 },
   yearly: { name: 'Annuale', price: 399.99, duration: 365 },
-};
-
-export const SPACING = {
-  xs: 4,
-  sm: 8,
-  md: 16,
-  lg: 24,
-  xl: 32,
-  xxl: 48,
 };
 
 export const BORDER_RADIUS = {

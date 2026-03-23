@@ -1,4 +1,4 @@
-// Input Component - Modern UI
+// Input Component - Stable Version
 import React, { useState } from 'react';
 import {
   View,
@@ -8,15 +8,14 @@ import {
   ViewStyle,
   TextInputProps,
   TouchableOpacity,
-  Animated,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, BORDER_RADIUS, SHADOWS } from '../utils/constants';
+import { COLORS } from '../utils/constants';
 
 interface InputProps extends TextInputProps {
   label?: string;
   error?: string;
-  hint?: string;
   leftIcon?: keyof typeof Ionicons.glyphMap;
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onRightIconPress?: () => void;
@@ -26,7 +25,6 @@ interface InputProps extends TextInputProps {
 export function Input({
   label,
   error,
-  hint,
   leftIcon,
   rightIcon,
   onRightIconPress,
@@ -41,39 +39,23 @@ export function Input({
     setIsSecure(!isSecure);
   };
 
-  const getBorderColor = () => {
-    if (error) return COLORS.error;
-    if (isFocused) return COLORS.primary;
-    return COLORS.border;
-  };
-
-  const getBackgroundColor = () => {
-    if (isFocused) return COLORS.surfaceLight;
-    return COLORS.surface;
-  };
-
   return (
     <View style={[styles.container, containerStyle]}>
       {label && <Text style={styles.label}>{label}</Text>}
       <View
         style={[
           styles.inputContainer,
-          {
-            borderColor: getBorderColor(),
-            backgroundColor: getBackgroundColor(),
-          },
           isFocused && styles.inputFocused,
           error && styles.inputError,
         ]}
       >
         {leftIcon && (
-          <View style={styles.leftIconContainer}>
-            <Ionicons
-              name={leftIcon}
-              size={20}
-              color={isFocused ? COLORS.primary : COLORS.textMuted}
-            />
-          </View>
+          <Ionicons
+            name={leftIcon}
+            size={20}
+            color={isFocused ? COLORS.primary : COLORS.textMuted}
+            style={styles.leftIcon}
+          />
         )}
         <TextInput
           style={[styles.input, leftIcon && { paddingLeft: 0 }]}
@@ -81,11 +63,12 @@ export function Input({
           secureTextEntry={isSecure}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
+          autoCorrect={false}
           autoComplete="off"
           textContentType="none"
           {...props}
         />
-        {secureTextEntry ? (
+        {secureTextEntry && (
           <TouchableOpacity onPress={handleToggleSecure} style={styles.rightIcon}>
             <Ionicons
               name={isSecure ? 'eye-off-outline' : 'eye-outline'}
@@ -93,78 +76,60 @@ export function Input({
               color={COLORS.textMuted}
             />
           </TouchableOpacity>
-        ) : rightIcon ? (
+        )}
+        {!secureTextEntry && rightIcon && (
           <TouchableOpacity onPress={onRightIconPress} style={styles.rightIcon}>
             <Ionicons name={rightIcon} size={20} color={COLORS.textMuted} />
           </TouchableOpacity>
-        ) : null}
+        )}
       </View>
-      {error && (
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={14} color={COLORS.error} />
-          <Text style={styles.error}>{error}</Text>
-        </View>
-      )}
-      {hint && !error && <Text style={styles.hint}>{hint}</Text>}
+      {error && <Text style={styles.error}>{error}</Text>}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   label: {
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.text,
-    marginBottom: 10,
-    letterSpacing: 0.2,
+    marginBottom: 8,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.surface,
-    borderRadius: BORDER_RADIUS.lg,
-    borderWidth: 1.5,
+    borderRadius: 12,
+    borderWidth: 1,
     borderColor: COLORS.border,
     paddingHorizontal: 16,
-    minHeight: 56,
+    minHeight: 52,
   },
   inputFocused: {
-    ...SHADOWS.small,
+    borderColor: COLORS.primary,
+    borderWidth: 2,
   },
   inputError: {
     borderColor: COLORS.error,
   },
-  leftIconContainer: {
+  leftIcon: {
     marginRight: 12,
-    width: 24,
-    alignItems: 'center',
   },
   rightIcon: {
-    padding: 6,
-    marginLeft: 8,
+    padding: 4,
   },
   input: {
     flex: 1,
     color: COLORS.text,
     fontSize: 16,
-    paddingVertical: 16,
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
+    paddingVertical: 14,
   },
   error: {
     color: COLORS.error,
-    fontSize: 13,
-    marginLeft: 6,
-  },
-  hint: {
-    color: COLORS.textMuted,
-    fontSize: 13,
-    marginTop: 8,
+    fontSize: 12,
+    marginTop: 4,
   },
 });
