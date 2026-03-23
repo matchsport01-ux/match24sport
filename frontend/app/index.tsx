@@ -17,34 +17,24 @@ export default function Index() {
   const router = useRouter();
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { t } = useLanguage();
-  const [forceShow, setForceShow] = useState(false);
-  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
+  const [showContent, setShowContent] = useState(false);
 
-  useEffect(() => {
-    const checkOnboarding = async () => {
-      try {
-        const completed = await AsyncStorage.getItem('onboarding_completed');
-        if (!completed && !isAuthenticated) {
-          router.replace('/onboarding');
-          return;
-        }
-      } catch (error) {
-        console.error('Error checking onboarding:', error);
-      }
-      setCheckingOnboarding(false);
-    };
-    checkOnboarding();
-  }, [isAuthenticated]);
-
+  // Simple approach: show content after max 2 seconds OR when auth check is done
   useEffect(() => {
     const timer = setTimeout(() => {
-      setForceShow(true);
-    }, 3000);
+      setShowContent(true);
+    }, 2000);
+
+    // If auth is already done, show content immediately
+    if (!authLoading) {
+      setShowContent(true);
+      clearTimeout(timer);
+    }
+
     return () => clearTimeout(timer);
-  }, []);
+  }, [authLoading]);
 
-  const isLoading = (authLoading || checkingOnboarding) && !forceShow;
-
+  // Handle Google OAuth callback
   useEffect(() => {
     if (Platform.OS === 'web') {
       const hash = window.location.hash;
@@ -53,8 +43,11 @@ export default function Index() {
         return;
       }
     }
+  }, []);
 
-    if (!isLoading && isAuthenticated && user) {
+  // Redirect authenticated users
+  useEffect(() => {
+    if (showContent && isAuthenticated && user) {
       if (user.role === 'super_admin') {
         router.replace('/admin/dashboard');
       } else if (user.role === 'club_admin') {
@@ -63,9 +56,23 @@ export default function Index() {
         router.replace('/player/home');
       }
     }
-  }, [isLoading, isAuthenticated, user]);
+  }, [showContent, isAuthenticated, user]);
 
-  if (isLoading) {
+  // Check onboarding only once when content is ready
+  useEffect(() => {
+    if (showContent && !isAuthenticated) {
+      AsyncStorage.getItem('onboarding_completed').then((completed) => {
+        if (!completed) {
+          router.replace('/onboarding');
+        }
+      }).catch(() => {
+        // If error checking, just show the welcome screen
+      });
+    }
+  }, [showContent, isAuthenticated]);
+
+  // Show loading only briefly
+  if (!showContent) {
     return <LoadingSpinner fullScreen message={t('loading')} />;
   }
 
