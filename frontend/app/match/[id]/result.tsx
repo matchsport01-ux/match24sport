@@ -89,18 +89,45 @@ export default function MatchResultScreen() {
 
     setIsSubmitting(true);
     try {
-      await apiClient.submitResult(match.match_id, {
+      const result = await apiClient.submitResult(match.match_id, {
         score_team_a: scoreTeamA,
         score_team_b: scoreTeamB,
         winner_team: winnerTeam,
         team_a_players: teamAPlayers,
         team_b_players: teamBPlayers,
       });
-      Alert.alert(t('success'), 'Risultato inviato', [
+      
+      // If we get here, the result was submitted successfully
+      Alert.alert(t('success'), 'Risultato inviato! Il circolo dovrà confermarlo.', [
         { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (error: any) {
-      Alert.alert('Errore', error.response?.data?.detail || 'Impossibile inviare il risultato');
+      console.error('Submit result error:', error);
+      
+      // Check if it's a network error but result might have been saved
+      const status = error.response?.status;
+      const isClientError = status && status >= 400 && status < 500;
+      
+      if (isClientError) {
+        // Real client error - show message
+        Alert.alert('Errore', error.response?.data?.detail || 'Impossibile inviare il risultato');
+      } else {
+        // Network/server error - result might have been saved
+        // Try to refresh the match to check
+        try {
+          const freshMatch = await apiClient.getMatch(match.match_id);
+          if (freshMatch.result && freshMatch.result.status === 'pending_confirmation') {
+            // Result was saved!
+            Alert.alert(t('success'), 'Risultato inviato! Il circolo dovrà confermarlo.', [
+              { text: 'OK', onPress: () => router.back() },
+            ]);
+            return;
+          }
+        } catch (refreshError) {
+          // Couldn't check
+        }
+        Alert.alert('Errore', 'Errore di connessione. Riprova.');
+      }
     } finally {
       setIsSubmitting(false);
     }

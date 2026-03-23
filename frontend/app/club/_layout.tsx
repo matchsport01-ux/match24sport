@@ -102,7 +102,13 @@ export default function ClubLayout() {
         }}
       />
       <Tabs.Screen
-        name="edit-court-[courtId]"
+        name="edit-court"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="pending-results"
         options={{
           href: null,
         }}

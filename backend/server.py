@@ -246,6 +246,16 @@ MATCH_FORMATS = {
     "calcio8": {"min_players": 16, "max_players": 18}
 }
 
+# Match duration in minutes per sport
+MATCH_DURATIONS = {
+    "padel": 90,          # 1 ora 30 minuti
+    "tennis": 60,         # 1 ora  
+    "tennis_singles": 60,
+    "tennis_doubles": 90,
+    "calcetto": 60,       # 1 ora
+    "calcio8": 90         # 1 ora 30 minuti
+}
+
 # User roles
 ROLES = ["player", "club_admin", "super_admin"]
 
@@ -1206,7 +1216,7 @@ async def join_match(match_id: str, user: dict = Depends(get_current_user)):
     if new_status == "full":
         club = await db.clubs.find_one({"club_id": match["club_id"]})
         if club:
-            club_user = await db.users.find_one({"user_id": club["owner_id"]})
+            club_user = await db.users.find_one({"user_id": club.get("admin_user_id")})
             if club_user:
                 await create_notification(
                     user_id=club_user["user_id"],
@@ -1366,7 +1376,7 @@ async def submit_match_result(match_id: str, result_data: MatchResultSubmit, use
     # Notify club about result submission
     match_club = await db.clubs.find_one({"club_id": match["club_id"]})
     if match_club:
-        club_user = await db.users.find_one({"user_id": match_club["owner_id"]})
+        club_user = await db.users.find_one({"user_id": match_club.get("admin_user_id")})
         if club_user and club_user["user_id"] != user["user_id"]:
             await create_notification(
                 user_id=club_user["user_id"],
@@ -2057,6 +2067,11 @@ async def get_cities():
 @api_router.get("/sports")
 async def get_sports():
     return SPORTS
+
+@api_router.get("/sports/durations")
+async def get_sports_durations():
+    """Get match duration in minutes for each sport"""
+    return MATCH_DURATIONS
 
 # ======================= ADMIN ENDPOINTS =======================
 

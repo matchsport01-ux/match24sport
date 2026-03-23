@@ -82,10 +82,44 @@ export default function MatchDetailScreen() {
     setIsJoining(true);
     try {
       await apiClient.joinMatch(match.match_id);
+      // Success - refresh match data and show success message
       await fetchMatch();
       Alert.alert(t('success'), t('booking_confirmed'));
     } catch (error: any) {
-      Alert.alert('Errore', error.response?.data?.detail || 'Impossibile iscriversi');
+      console.error('Join match error:', error);
+      
+      const status = error.response?.status;
+      const detail = error.response?.data?.detail;
+      const isClientError = status && status >= 400 && status < 500;
+      
+      if (isClientError) {
+        // Check if it's "already joined" - this means user is actually in
+        if (detail === 'Already joined this match') {
+          await fetchMatch();
+          Alert.alert(t('success'), t('booking_confirmed'));
+          return;
+        }
+        // Real error
+        Alert.alert('Errore', detail || 'Impossibile iscriversi');
+      } else {
+        // Network/server error - might have succeeded
+        // Refresh to check
+        try {
+          const freshMatch = await apiClient.getMatch(match.match_id);
+          const nowParticipant = freshMatch.participants?.some(
+            (p: MatchParticipant) => p.user_id === user?.user_id
+          );
+          if (nowParticipant) {
+            // Join succeeded!
+            setMatch(freshMatch);
+            Alert.alert(t('success'), t('booking_confirmed'));
+            return;
+          }
+        } catch (e) {
+          // Couldn't verify
+        }
+        Alert.alert('Errore', 'Errore di connessione. Riprova.');
+      }
     } finally {
       setIsJoining(false);
     }

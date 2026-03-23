@@ -13,12 +13,12 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, Input, Card } from '../../src/components';
-import { useLanguage } from '../../src/contexts/LanguageContext';
-import { COLORS, SPORTS } from '../../src/utils/constants';
-import { apiClient } from '../../src/api/client';
-import { LoadingSpinner } from '../../src/components/LoadingSpinner';
-import { successHaptic } from '../../src/utils/haptics';
+import { Button, Input, Card } from '../../../src/components';
+import { useLanguage } from '../../../src/contexts/LanguageContext';
+import { COLORS, SPORTS } from '../../../src/utils/constants';
+import { apiClient } from '../../../src/api/client';
+import { LoadingSpinner } from '../../../src/components/LoadingSpinner';
+import { successHaptic } from '../../../src/utils/haptics';
 
 export default function EditCourtScreen() {
   const router = useRouter();
@@ -34,6 +34,11 @@ export default function EditCourtScreen() {
   const [surfaceType, setSurfaceType] = useState('');
   const [isIndoor, setIsIndoor] = useState(false);
   const [pricePerHour, setPricePerHour] = useState('');
+  
+  // Schedule/Hours
+  const [openingTime, setOpeningTime] = useState('08:00');
+  const [closingTime, setClosingTime] = useState('22:00');
+  const [availableHours, setAvailableHours] = useState<string[]>([]);
 
   useEffect(() => {
     fetchCourt();
@@ -50,6 +55,15 @@ export default function EditCourtScreen() {
         setSurfaceType(foundCourt.surface_type || '');
         setIsIndoor(foundCourt.is_indoor || false);
         setPricePerHour(foundCourt.price_per_hour?.toString() || '');
+        setAvailableHours(foundCourt.available_hours || []);
+        
+        // Parse opening/closing from available_hours
+        if (foundCourt.available_hours && foundCourt.available_hours.length > 0) {
+          const firstSlot = foundCourt.available_hours[0];
+          const lastSlot = foundCourt.available_hours[foundCourt.available_hours.length - 1];
+          setOpeningTime(firstSlot.split('-')[0]);
+          setClosingTime(lastSlot.split('-')[1]);
+        }
       } else {
         Alert.alert('Errore', 'Campo non trovato');
         router.back();
@@ -62,6 +76,22 @@ export default function EditCourtScreen() {
     }
   };
 
+  // Generate available hours slots based on opening/closing time
+  const generateTimeSlots = () => {
+    const slots: string[] = [];
+    const [openHour] = openingTime.split(':').map(Number);
+    const [closeHour] = closingTime.split(':').map(Number);
+    
+    for (let h = openHour; h < closeHour; h++) {
+      const startTime = `${h.toString().padStart(2, '0')}:00`;
+      const endTime = `${(h + 1).toString().padStart(2, '0')}:00`;
+      slots.push(`${startTime}-${endTime}`);
+    }
+    
+    setAvailableHours(slots);
+    return slots;
+  };
+
   const handleSave = async () => {
     if (!name || !sport) {
       Alert.alert('Errore', 'Compila tutti i campi obbligatori');
@@ -70,12 +100,16 @@ export default function EditCourtScreen() {
 
     setIsSaving(true);
     try {
+      // Generate time slots if not set
+      const slots = availableHours.length > 0 ? availableHours : generateTimeSlots();
+      
       await apiClient.updateCourt(courtId!, {
         name,
         sport,
         surface_type: surfaceType,
         is_indoor: isIndoor,
         price_per_hour: parseFloat(pricePerHour) || 0,
+        available_hours: slots,
       });
       successHaptic();
       Alert.alert('Successo', 'Campo aggiornato');
@@ -169,12 +203,49 @@ export default function EditCourtScreen() {
             keyboardType="numeric"
           />
 
+          <Text style={styles.sectionTitle}>Orari di Apertura</Text>
+          <View style={styles.hoursRow}>
+            <View style={styles.hourInput}>
+              <Text style={styles.hourLabel}>Apertura</Text>
+              <TouchableOpacity 
+                style={styles.timeSelector}
+                onPress={() => {
+                  // Simple time selector - increment hours
+                  const [h] = openingTime.split(':').map(Number);
+                  const newH = h >= 23 ? 0 : h + 1;
+                  setOpeningTime(`${newH.toString().padStart(2, '0')}:00`);
+                }}
+              >
+                <Text style={styles.timeText}>{openingTime}</Text>
+                <Ionicons name="time-outline" size={20} color={COLORS.primary} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.hourInput}>
+              <Text style={styles.hourLabel}>Chiusura</Text>
+              <TouchableOpacity 
+                style={styles.timeSelector}
+                onPress={() => {
+                  const [h] = closingTime.split(':').map(Number);
+                  const newH = h >= 23 ? 0 : h + 1;
+                  setClosingTime(`${newH.toString().padStart(2, '0')}:00`);
+                }}
+              >
+                <Text style={styles.timeText}>{closingTime}</Text>
+                <Ionicons name="time-outline" size={20} color={COLORS.primary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+          <Text style={styles.hoursHint}>
+            Gli slot disponibili verranno generati automaticamente in base agli orari
+          </Text>
+
           <Button
             title="Salva Modifiche"
             onPress={handleSave}
             loading={isSaving}
             fullWidth
             size="large"
+            style={{ marginTop: 24 }}
           />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -261,5 +332,45 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.textMuted,
     marginTop: 8,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginTop: 16,
+    marginBottom: 12,
+  },
+  hoursRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  hourInput: {
+    flex: 1,
+  },
+  hourLabel: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginBottom: 6,
+  },
+  timeSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  timeText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  hoursHint: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 8,
+    fontStyle: 'italic',
   },
 });
