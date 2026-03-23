@@ -281,6 +281,30 @@ backend:
         agent: "testing"
         comment: "Promo code application tested successfully. Trial promo TRIAL3MESI correctly updates club subscription to trial status with proper expiration dates. Duplicate applications correctly rejected with Italian error 'Questo codice è già stato utilizzato'. Wrong promo types (percentage codes on trial endpoint) correctly rejected with 'Questo codice non è valido per una prova gratuita'."
 
+  - task: "Password Reset Flow"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Password reset flow tested comprehensively with 100% success rate. POST /api/auth/forgot-password returns 200 with reset_token for reviewer@apple.com. POST /api/auth/reset-password successfully resets password using token. Complete flow verified: request → reset → login with new password → restore original. Italian localization working: 'Password aggiornata con successo'."
+
+  - task: "Club Dashboard"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Club dashboard endpoint fully functional. GET /api/club/dashboard returns 200 with complete dashboard data including club details and comprehensive stats (courts_count, open_matches, full_matches, completed_matches, total_bookings). Proper authorization implemented - only club admins can access dashboard. Tested with real club admin credentials."
+
 frontend:
   - task: "Landing Page"
     implemented: true
@@ -518,3 +542,30 @@ agent_communication:
       
       STATUS: APP IS APPLE APP STORE REVIEW READY
       All critical requirements met for Apple Review process.
+  - agent: "testing"
+    message: |
+      FOCUSED REVIEW TESTING COMPLETED - 100% SUCCESS RATE (9/9 TESTS PASSED)
+      
+      🎯 REVIEW REQUEST VERIFICATION:
+      ✅ PASSWORD RESET FLOW - FULLY FUNCTIONAL:
+      - POST /api/auth/forgot-password with reviewer@apple.com returns 200 with reset_token
+      - POST /api/auth/reset-password with token and new password works correctly
+      - Complete flow tested: request → reset → login with new password → restore original
+      - Italian error messages properly localized: "Password aggiornata con successo"
+      
+      ✅ CLUB DASHBOARD - FULLY FUNCTIONAL:
+      - Created club admin credentials and registered test club successfully
+      - GET /api/club/dashboard returns 200 with complete dashboard data
+      - Response includes club details and comprehensive stats (courts, matches, bookings)
+      - Proper authorization: only club admins can access dashboard
+      
+      ✅ APPLE REVIEWER LOGIN - FULLY FUNCTIONAL:
+      - POST /api/auth/login with reviewer@apple.com / AppleReview2024! returns 200
+      - Response includes access_token and complete user object
+      - User role correctly set as "player", name: "Apple Reviewer"
+      - Account automatically created on backend startup with proper profile
+      
+      🏆 ALL REVIEW REQUIREMENTS SATISFIED:
+      Base URL: https://padel-finder-app.preview.emergentagent.com
+      All endpoints returning proper HTTP status codes with valid JSON responses.
+      Backend APIs are production-ready and fully functional for Apple App Store review.

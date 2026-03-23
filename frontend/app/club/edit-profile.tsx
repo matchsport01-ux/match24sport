@@ -74,7 +74,7 @@ export default function EditClubProfileScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [16, 9],
-      quality: 0.8,
+      quality: 0.5,  // Reduced quality for smaller file size
       base64: true,
     });
 
@@ -83,14 +83,21 @@ export default function EditClubProfileScreen() {
       try {
         const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
         
+        // Check if image is too large (> 2MB in base64)
+        if (base64Image.length > 2 * 1024 * 1024) {
+          Alert.alert('Errore', 'L\'immagine è troppo grande. Prova con un\'immagine più piccola.');
+          setIsUploadingPhoto(false);
+          return;
+        }
+        
         // Upload to backend
         await apiClient.updateClub({ logo: base64Image });
         setLogo(base64Image);
         successHaptic();
         Alert.alert('Successo', 'Foto del circolo aggiornata');
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error uploading photo:', error);
-        Alert.alert('Errore', 'Impossibile caricare la foto');
+        Alert.alert('Errore', error.response?.data?.detail || 'Impossibile caricare la foto. Prova con un\'immagine più piccola.');
       } finally {
         setIsUploadingPhoto(false);
       }

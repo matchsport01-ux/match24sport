@@ -101,6 +101,12 @@ export default function ClubLayout() {
           href: null,
         }}
       />
+      <Tabs.Screen
+        name="edit-court"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

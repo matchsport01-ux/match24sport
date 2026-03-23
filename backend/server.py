@@ -443,6 +443,95 @@ async def logout(request: Request):
     response.delete_cookie(key="session_token", path="/")
     return response
 
+# ======================= PASSWORD RESET ENDPOINTS =======================
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest):
+    """Request password reset - sends a reset token via email"""
+    user = await db.users.find_one({"email": request.email})
+    
+    if not user:
+        # Return success even if user doesn't exist (security best practice)
+        return {"message": "Se l'email esiste, riceverai le istruzioni per il reset"}
+    
+    # Generate reset token
+    reset_token = f"reset_{uuid.uuid4().hex}"
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    
+    # Store reset token
+    await db.password_resets.delete_many({"user_id": user["user_id"]})  # Remove old tokens
+    await db.password_resets.insert_one({
+        "user_id": user["user_id"],
+        "token": reset_token,
+        "email": request.email,
+        "expires_at": expires_at,
+        "created_at": datetime.now(timezone.utc),
+        "used": False
+    })
+    
+    # TODO: In production, send actual email here
+    # For now, we'll log the token and return success
+    logger.info(f"Password reset token for {request.email}: {reset_token}")
+    
+    # In development/demo mode, return the token (remove in production)
+    return {
+        "message": "Se l'email esiste, riceverai le istruzioni per il reset",
+        "reset_token": reset_token  # Remove this line in production
+    }
+
+@api_router.post("/auth/reset-password")
+async def reset_password(request: ResetPasswordRequest):
+    """Reset password using the reset token"""
+    # Find valid reset token
+    reset_record = await db.password_resets.find_one({
+        "token": request.token,
+        "used": False,
+        "expires_at": {"$gt": datetime.now(timezone.utc)}
+    })
+    
+    if not reset_record:
+        raise HTTPException(status_code=400, detail="Token non valido o scaduto")
+    
+    # Validate password
+    if len(request.new_password) < 6:
+        raise HTTPException(status_code=400, detail="La password deve avere almeno 6 caratteri")
+    
+    # Update password
+    password_hash = get_password_hash(request.new_password)
+    await db.users.update_one(
+        {"user_id": reset_record["user_id"]},
+        {"$set": {"password_hash": password_hash, "updated_at": datetime.now(timezone.utc)}}
+    )
+    
+    # Mark token as used
+    await db.password_resets.update_one(
+        {"token": request.token},
+        {"$set": {"used": True}}
+    )
+    
+    return {"message": "Password aggiornata con successo"}
+
+@api_router.get("/auth/verify-reset-token/{token}")
+async def verify_reset_token(token: str):
+    """Verify if a reset token is valid"""
+    reset_record = await db.password_resets.find_one({
+        "token": token,
+        "used": False,
+        "expires_at": {"$gt": datetime.now(timezone.utc)}
+    })
+    
+    if not reset_record:
+        raise HTTPException(status_code=400, detail="Token non valido o scaduto")
+    
+    return {"valid": True, "email": reset_record["email"]}
+
 # ======================= PLAYER PROFILE ENDPOINTS =======================
 
 @api_router.get("/player/profile")
@@ -1236,18 +1325,29 @@ async def get_match_chat(match_id: str, user: dict = Depends(get_current_user)):
 
 @api_router.post("/matches/{match_id}/chat")
 async def send_chat_message(match_id: str, message: ChatMessage, user: dict = Depends(get_current_user)):
-    # Verify user is participant
+    # Check if match exists first
+    match = await db.matches.find_one({"match_id": match_id})
+    if not match:
+        raise HTTPException(status_code=404, detail="Partita non trovata")
+    
+    # Verify user is participant OR is the club admin who created the match
     is_participant = await db.match_participants.find_one({
         "match_id": match_id,
         "user_id": user["user_id"]
     })
     
-    if not is_participant:
-        raise HTTPException(status_code=403, detail="Not a participant")
+    # Also check if user is the club admin for this match
+    is_club_admin = False
+    if match.get("club_id"):
+        club = await db.clubs.find_one({"club_id": match["club_id"]})
+        if club and club.get("admin_user_id") == user["user_id"]:
+            is_club_admin = True
+    
+    if not is_participant and not is_club_admin:
+        raise HTTPException(status_code=403, detail="Devi essere iscritto alla partita per inviare messaggi")
     
     # Check if match is active
-    match = await db.matches.find_one({"match_id": match_id})
-    if match and match.get("status") == "completed":
+    if match.get("status") == "completed":
         completed_at = match.get("updated_at", datetime.now(timezone.utc))
         if isinstance(completed_at, str):
             completed_at = datetime.fromisoformat(completed_at)

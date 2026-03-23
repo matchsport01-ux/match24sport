@@ -140,6 +140,22 @@ class APIClient {
     await this.clearToken();
   }
 
+  // Password Reset
+  async forgotPassword(email: string) {
+    const response = await this.client.post('/auth/forgot-password', { email });
+    return response.data;
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    const response = await this.client.post('/auth/reset-password', { token, new_password: newPassword });
+    return response.data;
+  }
+
+  async verifyResetToken(token: string) {
+    const response = await this.client.get(`/auth/verify-reset-token/${token}`);
+    return response.data;
+  }
+
   // Player Profile
   async getPlayerProfile() {
     const response = await this.client.get('/player/profile');
