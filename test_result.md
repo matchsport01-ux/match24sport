@@ -323,9 +323,9 @@ backend:
 frontend:
   - task: "Landing Page"
     implemented: true
-    working: true
+    working: false
     file: "/app/frontend/app/index.tsx"
-    stuck_count: 3
+    stuck_count: 4
     priority: "high"
     needs_retesting: false
     status_history:
@@ -350,6 +350,9 @@ frontend:
       - working: true
         agent: "testing"
         comment: "ROUND 2 VERIFICATION: Loading screen issue RESOLVED! App loads correctly without 'Caricamento...' blocking. All pages accessible and rendering properly on mobile (390x844). Login page, edit profile, 404 page, forgot password, and player home all working correctly. No more infinite loading states detected."
+      - working: false
+        agent: "testing"
+        comment: "CRITICAL PRODUCTION TESTING BLOCKED: 4th occurrence of loading screen issue confirmed. App completely stuck on 'Caricamento...' screen on iPhone 14 dimensions (390x844). Persists after 13+ seconds, even with direct navigation to /auth/login. ALL comprehensive frontend testing blocked. This is a fundamental AuthContext architectural issue requiring WEBSEARCH tool research for permanent fix."
 
   - task: "Login Screen"
     implemented: true
@@ -539,8 +542,12 @@ metadata:
 
 test_plan:
   current_focus:
-    - "All critical backend endpoints tested and working"
-  stuck_tasks: []
+    - "Landing Page - CRITICAL loading screen issue blocking all testing"
+    - "Login Screen - Cannot access due to loading screen"
+    - "AuthContext architectural fix required"
+  stuck_tasks:
+    - "Landing Page - 4th occurrence of loading screen issue"
+    - "Login Screen - Authentication blocked by loading screen"
   test_all: false
   test_priority: "critical_first"
 
@@ -601,6 +608,37 @@ agent_communication:
       - Court Management: ✓
       - Match Creation/Join: ✓
       Screenshots verified landing, login, register, and search pages render correctly.
+  - agent: "testing"
+    message: |
+      CRITICAL PRODUCTION TESTING BLOCKED - LOADING SCREEN ISSUE CONFIRMED
+      
+      🚨 CRITICAL FINDINGS:
+      - App completely stuck on "Caricamento..." loading screen on iPhone 14 dimensions (390x844)
+      - This is the SAME recurring issue reported multiple times in test history
+      - ALL comprehensive frontend testing is BLOCKED by this critical issue
+      - Issue persists even after 13+ seconds of waiting
+      - Direct navigation to /auth/login also shows loading screen
+      
+      📱 ATTEMPTED TESTS (ALL BLOCKED):
+      ❌ TEST 1: Player Login and Home Page - BLOCKED by loading screen
+      ❌ TEST 2: Favorites Heart Icon - BLOCKED by loading screen  
+      ❌ TEST 3: My Matches - Upcoming Section - BLOCKED by loading screen
+      ❌ TEST 4: Join Match and Verify UI Update - BLOCKED by loading screen
+      ❌ TEST 5: Available Matches - No Past Matches - BLOCKED by loading screen
+      ❌ TEST 6: Club Login and Pending Results - BLOCKED by loading screen
+      
+      🔍 ROOT CAUSE ANALYSIS:
+      This is the 4th occurrence of this exact issue in test history. Previous "fixes" were temporary patches.
+      The AuthContext async operations are hanging on web platform, causing infinite loading state.
+      
+      🏆 URGENT RECOMMENDATION FOR MAIN AGENT:
+      This requires IMMEDIATE ARCHITECTURAL FIX using WEBSEARCH tool to research:
+      1. React Native/Expo AuthContext best practices for web platform
+      2. Proper async initialization patterns that don't hang
+      3. Comprehensive timeout and fallback mechanisms
+      4. Alternative authentication initialization approaches
+      
+      STATUS: ALL FRONTEND TESTING COMPLETELY BLOCKED - REQUIRES IMMEDIATE ATTENTION
   - agent: "testing"
     message: |
       Comprehensive backend API testing completed with 95.5% success rate (21/22 tests passed).
