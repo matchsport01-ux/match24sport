@@ -20,6 +20,23 @@ import { apiClient } from '../../src/api/client';
 import { Court } from '../../src/types';
 import { format, addDays } from 'date-fns';
 
+// Default match durations per sport (in minutes)
+const SPORT_DURATIONS: Record<string, number> = {
+  padel: 90,
+  tennis: 60,
+  tennis_singles: 60,
+  tennis_doubles: 90,
+  calcetto: 60,
+  calcio8: 90,
+};
+
+// Available duration options (in minutes)
+const DURATION_OPTIONS = [
+  { value: 60, label: '1 ora' },
+  { value: 90, label: '1h 30min' },
+  { value: 120, label: '2 ore' },
+];
+
 export default function CreateMatchScreen() {
   const router = useRouter();
   const { t } = useLanguage();
@@ -32,7 +49,8 @@ export default function CreateMatchScreen() {
   const [selectedCourt, setSelectedCourt] = useState<Court | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [startTime, setStartTime] = useState('10:00');
-  const [endTime, setEndTime] = useState('11:00');
+  const [duration, setDuration] = useState(60); // Duration in minutes
+  const [showCustomDuration, setShowCustomDuration] = useState(false);
   const [skillLevel, setSkillLevel] = useState('all');
   const [maxPlayers, setMaxPlayers] = useState('4');
   const [pricePerPlayer, setPricePerPlayer] = useState('0');
@@ -50,6 +68,9 @@ export default function CreateMatchScreen() {
           if (sportFormat) {
             setMaxPlayers(sportFormat.maxPlayers.toString());
           }
+          // Set default duration based on sport
+          const sportDuration = SPORT_DURATIONS[data[0].sport] || 60;
+          setDuration(sportDuration);
         }
       } catch (error) {
         console.error('Error fetching courts:', error);
@@ -66,7 +87,21 @@ export default function CreateMatchScreen() {
     if (sportFormat) {
       setMaxPlayers(sportFormat.maxPlayers.toString());
     }
+    // Auto-update duration based on sport
+    const sportDuration = SPORT_DURATIONS[court.sport] || 60;
+    setDuration(sportDuration);
   };
+
+  // Calculate end time based on start time and duration
+  const calculateEndTime = (start: string, durationMinutes: number): string => {
+    const [hours, minutes] = start.split(':').map(Number);
+    const totalMinutes = hours * 60 + minutes + durationMinutes;
+    const endHours = Math.floor(totalMinutes / 60) % 24;
+    const endMinutes = totalMinutes % 60;
+    return `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+  };
+
+  const endTime = calculateEndTime(startTime, duration);
 
   const handleSubmit = async () => {
     if (!selectedCourt) {
@@ -83,6 +118,7 @@ export default function CreateMatchScreen() {
         date: format(selectedDate, 'yyyy-MM-dd'),
         start_time: startTime,
         end_time: endTime,
+        duration_minutes: duration,
         max_players: parseInt(maxPlayers),
         skill_level: skillLevel,
         price_per_player: parseFloat(pricePerPlayer) || 0,
@@ -227,54 +263,87 @@ export default function CreateMatchScreen() {
           {/* Time Selection */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('time')}</Text>
-            <View style={styles.timeRow}>
-              <View style={styles.timeSelect}>
-                <Text style={styles.timeLabel}>Inizio</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View style={styles.timeSlotsRow}>
-                    {timeSlots.map((time) => (
-                      <TouchableOpacity
-                        key={`start-${time}`}
-                        style={[
-                          styles.timeSlot,
-                          startTime === time && styles.timeSlotSelected,
-                        ]}
-                        onPress={() => setStartTime(time)}
-                      >
-                        <Text style={[
-                          styles.timeSlotText,
-                          startTime === time && styles.timeSlotTextSelected,
-                        ]}>
-                          {time}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </ScrollView>
+            
+            {/* Start Time */}
+            <View style={styles.timeSelect}>
+              <Text style={styles.timeLabel}>Orario di inizio</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.timeSlotsRow}>
+                  {timeSlots.map((time) => (
+                    <TouchableOpacity
+                      key={`start-${time}`}
+                      style={[
+                        styles.timeSlot,
+                        startTime === time && styles.timeSlotSelected,
+                      ]}
+                      onPress={() => setStartTime(time)}
+                    >
+                      <Text style={[
+                        styles.timeSlotText,
+                        startTime === time && styles.timeSlotTextSelected,
+                      ]}>
+                        {time}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+
+            {/* Duration Selection */}
+            <View style={styles.durationSection}>
+              <View style={styles.durationHeader}>
+                <Text style={styles.timeLabel}>Durata partita</Text>
+                <TouchableOpacity 
+                  style={styles.customizeButton}
+                  onPress={() => setShowCustomDuration(!showCustomDuration)}
+                >
+                  <Ionicons 
+                    name={showCustomDuration ? "chevron-up" : "settings-outline"} 
+                    size={18} 
+                    color={COLORS.primary} 
+                  />
+                  <Text style={styles.customizeText}>
+                    {showCustomDuration ? 'Chiudi' : 'Personalizza'}
+                  </Text>
+                </TouchableOpacity>
               </View>
-              <View style={styles.timeSelect}>
-                <Text style={styles.timeLabel}>Fine</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View style={styles.timeSlotsRow}>
-                    {timeSlots.map((time) => (
-                      <TouchableOpacity
-                        key={`end-${time}`}
-                        style={[
-                          styles.timeSlot,
-                          endTime === time && styles.timeSlotSelected,
-                        ]}
-                        onPress={() => setEndTime(time)}
-                      >
-                        <Text style={[
-                          styles.timeSlotText,
-                          endTime === time && styles.timeSlotTextSelected,
-                        ]}>
-                          {time}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </ScrollView>
+              
+              {/* Duration Options */}
+              <View style={styles.durationOptionsRow}>
+                {DURATION_OPTIONS.map((option) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.durationOption,
+                      duration === option.value && styles.durationOptionSelected,
+                    ]}
+                    onPress={() => setDuration(option.value)}
+                  >
+                    <Text style={[
+                      styles.durationText,
+                      duration === option.value && styles.durationTextSelected,
+                    ]}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Sport default hint */}
+              {selectedCourt && (
+                <Text style={styles.durationHint}>
+                  Durata standard per {selectedCourt.sport}: {SPORT_DURATIONS[selectedCourt.sport] || 60} min
+                </Text>
+              )}
+            </View>
+
+            {/* Calculated End Time Display */}
+            <View style={styles.endTimeDisplay}>
+              <View style={styles.endTimeBox}>
+                <Ionicons name="time-outline" size={20} color={COLORS.primary} />
+                <Text style={styles.endTimeLabel}>Orario di fine calcolato:</Text>
+                <Text style={styles.endTimeValue}>{endTime}</Text>
               </View>
             </View>
           </View>
@@ -519,5 +588,79 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     marginTop: 16,
+  },
+  durationSection: {
+    marginTop: 16,
+  },
+  durationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  customizeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: COLORS.primary + '15',
+  },
+  customizeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  durationOptionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  durationOption: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  durationOptionSelected: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary + '20',
+  },
+  durationText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  durationTextSelected: {
+    color: COLORS.primary,
+  },
+  durationHint: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  endTimeDisplay: {
+    marginTop: 16,
+  },
+  endTimeBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surfaceLight,
+    padding: 14,
+    borderRadius: 12,
+    gap: 10,
+  },
+  endTimeLabel: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    flex: 1,
+  },
+  endTimeValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
 });

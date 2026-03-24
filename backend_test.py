@@ -1,399 +1,285 @@
 #!/usr/bin/env python3
 """
-Backend API Testing for Match Sport 24 - Critical Production Testing
-Tests the 5 critical backend flows as requested in the review.
+Backend API Testing Script for Match Creation with Duration
+Testing specific review request for padel match creation with 90-minute duration
 """
 
-import asyncio
-import httpx
+import requests
 import json
-import os
-from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, Optional
+import sys
+from datetime import datetime, timedelta
 
 # Configuration
 BASE_URL = "https://padel-finder-app.preview.emergentagent.com/api"
-TIMEOUT = 30.0
+CLUB_EMAIL = "newclubtest6051@test.com"
+CLUB_PASSWORD = "TestPass123!"
 
 class BackendTester:
     def __init__(self):
-        self.client = httpx.AsyncClient(timeout=TIMEOUT)
+        self.session = requests.Session()
         self.club_token = None
-        self.player_token = None
+        self.club_id = None
+        self.court_id = None
+        self.match_id = None
         self.test_results = []
         
-    async def __aenter__(self):
-        return self
+    def log_test(self, test_name, success, details="", response_data=None):
+        """Log test results"""
+        status = "✅ PASS" if success else "❌ FAIL"
+        print(f"{status} {test_name}")
+        if details:
+            print(f"   Details: {details}")
+        if response_data and isinstance(response_data, dict):
+            print(f"   Response: {json.dumps(response_data, indent=2)}")
+        print()
         
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.client.aclose()
-    
-    def log_result(self, test_name: str, status: str, details: str, response_data: Any = None):
-        """Log test result"""
-        result = {
+        self.test_results.append({
             "test": test_name,
-            "status": status,
+            "success": success,
             "details": details,
-            "timestamp": datetime.now().isoformat(),
-            "response_data": response_data
-        }
-        self.test_results.append(result)
-        print(f"[{status}] {test_name}: {details}")
-        if response_data and status == "FAIL":
-            print(f"    Response: {json.dumps(response_data, indent=2)}")
+            "response": response_data
+        })
     
-    async def login_club(self) -> bool:
-        """Login as club admin"""
+    def test_club_login(self):
+        """Test 1: Login as club admin"""
+        print("🔐 TEST 1: Club Admin Login")
+        
         try:
-            response = await self.client.post(f"{BASE_URL}/auth/login", json={
-                "email": "newclubtest6051@test.com",
-                "password": "TestPass123!"
+            response = self.session.post(f"{BASE_URL}/auth/login", json={
+                "email": CLUB_EMAIL,
+                "password": CLUB_PASSWORD
             })
             
             if response.status_code == 200:
                 data = response.json()
-                self.club_token = data.get("access_token")
-                self.log_result("Club Login", "PASS", f"Successfully logged in as club admin")
-                return True
+                if "access_token" in data:
+                    self.club_token = data["access_token"]
+                    self.session.headers.update({"Authorization": f"Bearer {self.club_token}"})
+                    
+                    # Extract club_id if available
+                    if "user" in data and "club_id" in data["user"]:
+                        self.club_id = data["user"]["club_id"]
+                    
+                    self.log_test("Club Login", True, 
+                                f"Successfully logged in as {CLUB_EMAIL}", 
+                                {"user_role": data.get("user", {}).get("role"), 
+                                 "club_id": self.club_id})
+                    return True
+                else:
+                    self.log_test("Club Login", False, "No access_token in response", data)
+                    return False
             else:
-                self.log_result("Club Login", "FAIL", f"Login failed with status {response.status_code}", response.json())
+                self.log_test("Club Login", False, 
+                            f"HTTP {response.status_code}: {response.text}")
                 return False
                 
         except Exception as e:
-            self.log_result("Club Login", "FAIL", f"Login error: {str(e)}")
+            self.log_test("Club Login", False, f"Exception: {str(e)}")
             return False
     
-    async def login_player(self) -> bool:
-        """Login as player"""
-        try:
-            response = await self.client.post(f"{BASE_URL}/auth/login", json={
-                "email": "reviewer@apple.com",
-                "password": "AppleReview2024!"
-            })
-            
-            if response.status_code == 200:
-                data = response.json()
-                self.player_token = data.get("access_token")
-                self.log_result("Player Login", "PASS", f"Successfully logged in as player")
-                return True
-            else:
-                self.log_result("Player Login", "FAIL", f"Login failed with status {response.status_code}", response.json())
-                return False
-                
-        except Exception as e:
-            self.log_result("Player Login", "FAIL", f"Login error: {str(e)}")
-            return False
-    
-    def get_auth_headers(self, token: str) -> Dict[str, str]:
-        """Get authorization headers"""
-        return {"Authorization": f"Bearer {token}"}
-    
-    async def test_1_edit_court_route(self) -> bool:
-        """TEST 1: Edit Court Route Fix"""
-        print("\n=== TEST 1: Edit Court Route Fix ===")
-        
-        if not await self.login_club():
-            return False
+    def test_get_club_courts(self):
+        """Test 2: Get club courts"""
+        print("🏟️ TEST 2: Get Club Courts")
         
         try:
-            # Step 1: Get club courts
-            response = await self.client.get(
-                f"{BASE_URL}/club/courts",
-                headers=self.get_auth_headers(self.club_token)
-            )
-            
-            if response.status_code != 200:
-                self.log_result("TEST 1 - Get Courts", "FAIL", f"Failed to get courts: {response.status_code}", response.json())
-                return False
-            
-            courts = response.json()
-            self.log_result("TEST 1 - Get Courts", "PASS", f"Retrieved {len(courts)} courts")
-            
-            if not courts:
-                self.log_result("TEST 1 - Court Update", "SKIP", "No courts available to update")
-                return True
-            
-            # Step 2: Update first court
-            court_id = courts[0]["court_id"]
-            update_data = {
-                "name": "Test Court Updated",
-                "available_hours": ["09:00-10:00", "10:00-11:00"]
-            }
-            
-            response = await self.client.put(
-                f"{BASE_URL}/club/courts/{court_id}",
-                headers=self.get_auth_headers(self.club_token),
-                json=update_data
-            )
-            
-            if response.status_code != 200:
-                self.log_result("TEST 1 - Court Update", "FAIL", f"Failed to update court: {response.status_code}", response.json())
-                return False
-            
-            updated_court = response.json()
-            self.log_result("TEST 1 - Court Update", "PASS", f"Court updated successfully: {updated_court['name']}")
-            
-            # Step 3: Verify update
-            response = await self.client.get(
-                f"{BASE_URL}/club/courts",
-                headers=self.get_auth_headers(self.club_token)
-            )
+            response = self.session.get(f"{BASE_URL}/club/courts")
             
             if response.status_code == 200:
                 courts = response.json()
-                updated_court = next((c for c in courts if c["court_id"] == court_id), None)
-                if updated_court and updated_court["name"] == "Test Court Updated":
-                    self.log_result("TEST 1 - Verify Update", "PASS", "Court update verified successfully")
+                if isinstance(courts, list) and len(courts) > 0:
+                    self.court_id = courts[0]["court_id"]
+                    self.log_test("Get Club Courts", True, 
+                                f"Found {len(courts)} courts, using court_id: {self.court_id}",
+                                {"courts_count": len(courts), "first_court": courts[0]})
                     return True
                 else:
-                    self.log_result("TEST 1 - Verify Update", "FAIL", "Court update not reflected in database")
+                    self.log_test("Get Club Courts", False, 
+                                "No courts found - need at least one court for match creation",
+                                courts)
                     return False
             else:
-                self.log_result("TEST 1 - Verify Update", "FAIL", f"Failed to verify update: {response.status_code}")
+                self.log_test("Get Club Courts", False, 
+                            f"HTTP {response.status_code}: {response.text}")
                 return False
                 
         except Exception as e:
-            self.log_result("TEST 1 - Exception", "FAIL", f"Test failed with exception: {str(e)}")
+            self.log_test("Get Club Courts", False, f"Exception: {str(e)}")
             return False
     
-    async def test_2_match_join_flow(self) -> bool:
-        """TEST 2: Match Join Flow"""
-        print("\n=== TEST 2: Match Join Flow ===")
+    def test_create_padel_match(self):
+        """Test 3: Create padel match with 90-minute duration"""
+        print("🎾 TEST 3: Create Padel Match (90 minutes)")
         
-        if not await self.login_player():
+        if not self.court_id:
+            self.log_test("Create Padel Match", False, "No court_id available")
+            return False
+        
+        # Calculate future date for match
+        future_date = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+        
+        match_data = {
+            "sport": "padel",
+            "format": "padel",
+            "court_id": self.court_id,
+            "date": future_date,
+            "start_time": "10:00",
+            "end_time": "11:30",
+            "duration_minutes": 90,
+            "max_players": 4,
+            "skill_level": "all",
+            "price_per_player": 10
+        }
+        
+        try:
+            response = self.session.post(f"{BASE_URL}/matches", json=match_data)
+            
+            if response.status_code in [200, 201]:
+                data = response.json()
+                if "match_id" in data:
+                    self.match_id = data["match_id"]
+                    
+                    # Verify duration_minutes in response
+                    duration_correct = data.get("duration_minutes") == 90
+                    
+                    self.log_test("Create Padel Match", True, 
+                                f"Match created with ID: {self.match_id}, Duration: {data.get('duration_minutes')} minutes",
+                                data)
+                    
+                    if not duration_correct:
+                        self.log_test("Duration Verification", False, 
+                                    f"Expected duration_minutes=90, got {data.get('duration_minutes')}")
+                        return False
+                    
+                    return True
+                else:
+                    self.log_test("Create Padel Match", False, "No match_id in response", data)
+                    return False
+            else:
+                self.log_test("Create Padel Match", False, 
+                            f"HTTP {response.status_code}: {response.text}")
+                return False
+                
+        except Exception as e:
+            self.log_test("Create Padel Match", False, f"Exception: {str(e)}")
+            return False
+    
+    def test_get_match_details(self):
+        """Test 4: Get match details and verify duration"""
+        print("📋 TEST 4: Get Match Details")
+        
+        if not self.match_id:
+            self.log_test("Get Match Details", False, "No match_id available")
             return False
         
         try:
-            # Step 1: Get open matches
-            response = await self.client.get(f"{BASE_URL}/matches?status=open")
-            
-            if response.status_code != 200:
-                self.log_result("TEST 2 - Get Matches", "FAIL", f"Failed to get matches: {response.status_code}", response.json())
-                return False
-            
-            matches = response.json()
-            self.log_result("TEST 2 - Get Matches", "PASS", f"Retrieved {len(matches)} open matches")
-            
-            if not matches:
-                self.log_result("TEST 2 - Match Join", "SKIP", "No open matches available to join")
-                return True
-            
-            # Step 2: Try to join first match
-            match_id = matches[0]["match_id"]
-            
-            response = await self.client.post(
-                f"{BASE_URL}/matches/{match_id}/join",
-                headers=self.get_auth_headers(self.player_token)
-            )
+            response = self.session.get(f"{BASE_URL}/matches/{self.match_id}")
             
             if response.status_code == 200:
-                self.log_result("TEST 2 - Match Join", "PASS", "Successfully joined match")
-                return True
-            elif response.status_code == 400:
-                error_data = response.json()
-                if "Already joined" in error_data.get("detail", ""):
-                    self.log_result("TEST 2 - Match Join", "PASS", "Already joined this match (expected)")
+                data = response.json()
+                duration_minutes = data.get("duration_minutes")
+                
+                if duration_minutes == 90:
+                    self.log_test("Get Match Details", True, 
+                                f"Match details retrieved, duration_minutes confirmed: {duration_minutes}",
+                                {"match_id": self.match_id, "duration_minutes": duration_minutes,
+                                 "sport": data.get("sport"), "format": data.get("format")})
                     return True
                 else:
-                    self.log_result("TEST 2 - Match Join", "FAIL", f"Join failed: {error_data.get('detail')}", error_data)
+                    self.log_test("Get Match Details", False, 
+                                f"Duration mismatch - expected 90, got {duration_minutes}", data)
                     return False
             else:
-                self.log_result("TEST 2 - Match Join", "FAIL", f"Join failed with status {response.status_code}", response.json())
+                self.log_test("Get Match Details", False, 
+                            f"HTTP {response.status_code}: {response.text}")
                 return False
                 
         except Exception as e:
-            self.log_result("TEST 2 - Exception", "FAIL", f"Test failed with exception: {str(e)}")
+            self.log_test("Get Match Details", False, f"Exception: {str(e)}")
             return False
     
-    async def test_3_submit_match_result(self) -> bool:
-        """TEST 3: Submit Match Result"""
-        print("\n=== TEST 3: Submit Match Result ===")
-        
-        if not await self.login_player():
-            return False
+    def test_sports_durations(self):
+        """Test 5: Verify sports duration endpoint"""
+        print("⏱️ TEST 5: Sports Duration Configuration")
         
         try:
-            # Step 1: Get player's matches
-            response = await self.client.get(
-                f"{BASE_URL}/player/history",
-                headers=self.get_auth_headers(self.player_token)
-            )
-            
-            if response.status_code != 200:
-                self.log_result("TEST 3 - Get Player Matches", "FAIL", f"Failed to get player matches: {response.status_code}", response.json())
-                return False
-            
-            matches = response.json()
-            self.log_result("TEST 3 - Get Player Matches", "PASS", f"Retrieved {len(matches)} player matches")
-            
-            # Look for a completed match without result
-            completed_match = None
-            for match in matches:
-                if match.get("status") == "completed" or match.get("status") == "full":
-                    # Check if result already exists
-                    result_response = await self.client.get(f"{BASE_URL}/matches/{match['match_id']}")
-                    if result_response.status_code == 200:
-                        match_details = result_response.json()
-                        if not match_details.get("result"):
-                            completed_match = match
-                            break
-            
-            if not completed_match:
-                self.log_result("TEST 3 - Submit Result", "SKIP", "No completed matches without results found")
-                return True
-            
-            # Step 2: Submit match result
-            match_id = completed_match["match_id"]
-            result_data = {
-                "score_team_a": "6-4",
-                "score_team_b": "4-6",
-                "winner_team": "A",
-                "team_a_players": [self.get_player_id()],
-                "team_b_players": ["dummy_player_id"]
-            }
-            
-            response = await self.client.post(
-                f"{BASE_URL}/matches/{match_id}/result",
-                headers=self.get_auth_headers(self.player_token),
-                json=result_data
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                if result.get("status") == "pending_confirmation":
-                    self.log_result("TEST 3 - Submit Result", "PASS", "Match result submitted with status 'pending_confirmation'")
-                    return True
-                else:
-                    self.log_result("TEST 3 - Submit Result", "FAIL", f"Result submitted but status is '{result.get('status')}', expected 'pending_confirmation'", result)
-                    return False
-            else:
-                self.log_result("TEST 3 - Submit Result", "FAIL", f"Failed to submit result: {response.status_code}", response.json())
-                return False
-                
-        except Exception as e:
-            self.log_result("TEST 3 - Exception", "FAIL", f"Test failed with exception: {str(e)}")
-            return False
-    
-    def get_player_id(self) -> str:
-        """Get current player ID from token (simplified)"""
-        # In a real implementation, we'd decode the JWT token
-        # For now, return a placeholder
-        return "player_test_id"
-    
-    async def test_4_club_pending_results(self) -> bool:
-        """TEST 4: Club Pending Results Query"""
-        print("\n=== TEST 4: Club Pending Results Query ===")
-        
-        if not await self.login_club():
-            return False
-        
-        try:
-            response = await self.client.get(
-                f"{BASE_URL}/club/matches/pending-results",
-                headers=self.get_auth_headers(self.club_token)
-            )
-            
-            if response.status_code == 200:
-                results = response.json()
-                if isinstance(results, list):
-                    self.log_result("TEST 4 - Pending Results", "PASS", f"Retrieved {len(results)} pending results (array structure confirmed)")
-                    return True
-                else:
-                    self.log_result("TEST 4 - Pending Results", "FAIL", f"Response is not an array: {type(results)}", results)
-                    return False
-            else:
-                self.log_result("TEST 4 - Pending Results", "FAIL", f"Failed to get pending results: {response.status_code}", response.json())
-                return False
-                
-        except Exception as e:
-            self.log_result("TEST 4 - Exception", "FAIL", f"Test failed with exception: {str(e)}")
-            return False
-    
-    async def test_5_sports_duration_config(self) -> bool:
-        """TEST 5: Sports Duration Config"""
-        print("\n=== TEST 5: Sports Duration Config ===")
-        
-        try:
-            response = await self.client.get(f"{BASE_URL}/sports/durations")
+            response = self.session.get(f"{BASE_URL}/sports/durations")
             
             if response.status_code == 200:
                 durations = response.json()
-                padel_duration = durations.get("padel")
                 
-                if padel_duration == 90:
-                    self.log_result("TEST 5 - Sports Duration", "PASS", f"Padel duration is correctly set to 90 minutes")
-                    return True
-                else:
-                    self.log_result("TEST 5 - Sports Duration", "FAIL", f"Padel duration is {padel_duration}, expected 90", durations)
-                    return False
+                # Expected durations
+                expected = {
+                    "padel": 90,
+                    "tennis": 60,
+                    "calcetto": 60,
+                    "calcio8": 90
+                }
+                
+                all_correct = True
+                details = []
+                
+                for sport, expected_duration in expected.items():
+                    actual_duration = durations.get(sport)
+                    if actual_duration == expected_duration:
+                        details.append(f"{sport}: {actual_duration} ✓")
+                    else:
+                        details.append(f"{sport}: expected {expected_duration}, got {actual_duration} ✗")
+                        all_correct = False
+                
+                self.log_test("Sports Duration Configuration", all_correct, 
+                            "; ".join(details), durations)
+                return all_correct
             else:
-                self.log_result("TEST 5 - Sports Duration", "FAIL", f"Failed to get sports durations: {response.status_code}", response.json())
+                self.log_test("Sports Duration Configuration", False, 
+                            f"HTTP {response.status_code}: {response.text}")
                 return False
                 
         except Exception as e:
-            self.log_result("TEST 5 - Exception", "FAIL", f"Test failed with exception: {str(e)}")
+            self.log_test("Sports Duration Configuration", False, f"Exception: {str(e)}")
             return False
     
-    async def run_all_tests(self):
-        """Run all critical tests"""
-        print("🚀 Starting Critical Backend Testing for Match Sport 24")
-        print(f"Base URL: {BASE_URL}")
+    def run_all_tests(self):
+        """Run all tests in sequence"""
+        print("🚀 STARTING MATCH CREATION WITH DURATION TESTING")
         print("=" * 60)
         
         tests = [
-            ("TEST 1: Edit Court Route Fix", self.test_1_edit_court_route),
-            ("TEST 2: Match Join Flow", self.test_2_match_join_flow),
-            ("TEST 3: Submit Match Result", self.test_3_submit_match_result),
-            ("TEST 4: Club Pending Results Query", self.test_4_club_pending_results),
-            ("TEST 5: Sports Duration Config", self.test_5_sports_duration_config),
+            self.test_club_login,
+            self.test_get_club_courts,
+            self.test_create_padel_match,
+            self.test_get_match_details,
+            self.test_sports_durations
         ]
         
         passed = 0
-        failed = 0
-        skipped = 0
+        total = len(tests)
         
-        for test_name, test_func in tests:
-            try:
-                result = await test_func()
-                if result:
-                    passed += 1
-                else:
-                    failed += 1
-            except Exception as e:
-                print(f"[ERROR] {test_name}: {str(e)}")
-                failed += 1
+        for test in tests:
+            if test():
+                passed += 1
+            else:
+                # If a critical test fails, we might not be able to continue
+                if test in [self.test_club_login, self.test_get_club_courts]:
+                    print("❌ Critical test failed - stopping execution")
+                    break
         
-        # Count skipped tests
-        for result in self.test_results:
-            if result["status"] == "SKIP":
-                skipped += 1
-                passed -= 1  # Adjust passed count
-        
-        print("\n" + "=" * 60)
-        print("🏆 CRITICAL BACKEND TESTING SUMMARY")
         print("=" * 60)
-        print(f"✅ PASSED: {passed}")
-        print(f"❌ FAILED: {failed}")
-        print(f"⏭️  SKIPPED: {skipped}")
-        print(f"📊 SUCCESS RATE: {(passed/(passed+failed)*100):.1f}%" if (passed+failed) > 0 else "N/A")
+        print(f"🏆 FINAL RESULTS: {passed}/{total} tests passed")
         
-        print("\n📋 DETAILED RESULTS:")
-        for result in self.test_results:
-            status_emoji = "✅" if result["status"] == "PASS" else "❌" if result["status"] == "FAIL" else "⏭️"
-            print(f"{status_emoji} {result['test']}: {result['details']}")
-        
-        return passed, failed, skipped
-
-async def main():
-    """Main test runner"""
-    async with BackendTester() as tester:
-        passed, failed, skipped = await tester.run_all_tests()
-        
-        # Exit with appropriate code
-        if failed > 0:
-            exit(1)
+        if passed == total:
+            print("✅ ALL TESTS PASSED - Match creation with 90-minute duration working correctly")
         else:
-            exit(0)
+            print("❌ SOME TESTS FAILED - Issues found with match creation or duration configuration")
+        
+        return passed == total
+
+def main():
+    """Main execution function"""
+    tester = BackendTester()
+    success = tester.run_all_tests()
+    
+    # Exit with appropriate code
+    sys.exit(0 if success else 1)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

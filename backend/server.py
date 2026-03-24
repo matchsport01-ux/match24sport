@@ -353,6 +353,7 @@ class MatchCreate(BaseModel):
     date: str  # ISO format date
     start_time: str  # e.g., "10:00"
     end_time: str  # e.g., "11:00"
+    duration_minutes: int = 60  # Default 60 minutes, padel uses 90
     max_players: int
     skill_level: str = "all"  # "beginner", "intermediate", "advanced", "all"
     price_per_player: float = 0.0
