@@ -1508,7 +1508,7 @@ async def submit_match_result(match_id: str, result_data: MatchResultSubmit, use
                 notification_type=NOTIFICATION_TYPES["MATCH_RESULT_SUBMITTED"],
                 match_id=match_id,
                 sender_id=user["user_id"],
-                data={"score_a": result_data.score_a, "score_b": result_data.score_b}
+                data={"score_a": result_data.score_team_a, "score_b": result_data.score_team_b}
             )
     
     # Notify other participants
@@ -1748,7 +1748,8 @@ async def get_club_pending_results(user: dict = Depends(get_current_user)):
                 "match": {
                     "sport": match["sport"],
                     "date": match["date"],
-                    "time": match["time"],
+                    "start_time": match["start_time"],
+                    "end_time": match["end_time"],
                     "court_id": match.get("court_id")
                 },
                 "submitted_by_name": submitter["name"] if submitter else "Unknown"
