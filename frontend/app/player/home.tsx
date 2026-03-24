@@ -1,5 +1,5 @@
 // Player Home Screen - Stable Version
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { MatchCard, EmptyState, Card, MatchCardSkeleton, RatingCardSkeleton } from '../../src/components';
@@ -29,7 +29,7 @@ export default function PlayerHomeScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [matchesData, ratingsData] = await Promise.all([
         apiClient.listMatches({ status: 'open', limit: 5 }),
@@ -43,11 +43,14 @@ export default function PlayerHomeScreen() {
       setIsLoading(false);
       setRefreshing(false);
     }
-  };
-
-  useEffect(() => {
-    fetchData();
   }, []);
+
+  // Refresh data when screen comes into focus (e.g., after joining a match)
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [fetchData])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);

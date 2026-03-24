@@ -9,7 +9,7 @@ import {
   RefreshControl,
   TextInput,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { MatchCard, EmptyState, ListSkeleton } from '../../src/components';
@@ -60,8 +60,14 @@ export default function PlayerSearchScreen() {
     }
   };
 
+  // Refresh data when screen comes into focus (e.g., after joining a match)
+  useFocusEffect(
+    useCallback(() => {
+      fetchMatches();
+    }, [fetchMatches])
+  );
+
   useEffect(() => {
-    fetchMatches();
     fetchCities();
   }, []);
 

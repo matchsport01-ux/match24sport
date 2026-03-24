@@ -1,5 +1,5 @@
 // Player My Matches Screen
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { MatchCard, LoadingSpinner, EmptyState, Card } from '../../src/components';
@@ -27,37 +27,29 @@ export default function PlayerMyMatchesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming');
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
-      const history = await apiClient.getPlayerHistory(50);
-      
-      // Separate upcoming and past matches
-      const now = new Date();
-      const upcoming: Match[] = [];
-      const past: Match[] = [];
-      
-      history.forEach((match: Match) => {
-        const matchDate = new Date(match.date + 'T' + match.start_time);
-        if (matchDate >= now && match.status !== 'completed') {
-          upcoming.push(match);
-        } else {
-          past.push(match);
-        }
-      });
-      
-      setUpcomingMatches(upcoming);
-      setPastMatches(past);
+      // Use the new endpoint that returns both upcoming and past matches
+      const data = await apiClient.getPlayerMyMatches(50);
+      setUpcomingMatches(data.upcoming || []);
+      setPastMatches(data.past || []);
     } catch (error) {
-      console.error('Error fetching matches:', error);
+      console.error('Error fetching my matches:', error);
+      // Fallback to empty arrays
+      setUpcomingMatches([]);
+      setPastMatches([]);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
     }
-  };
-
-  useEffect(() => {
-    fetchData();
   }, []);
+
+  // Refresh data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [fetchData])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);

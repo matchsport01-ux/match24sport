@@ -21,6 +21,7 @@ import { apiClient } from '../../../src/api/client';
 import { Match, MatchParticipant } from '../../../src/types';
 import { format, parseISO } from 'date-fns';
 import { it, es, fr, enUS } from 'date-fns/locale';
+import { lightHaptic } from '../../../src/utils/haptics';
 
 export default function MatchDetailScreen() {
   const router = useRouter();
@@ -33,6 +34,8 @@ export default function MatchDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
 
   const getLocale = () => {
     switch (language) {
@@ -48,6 +51,16 @@ export default function MatchDetailScreen() {
     try {
       const data = await apiClient.getMatch(id);
       setMatch(data);
+      
+      // Check if club is in favorites
+      if (data.club_id && user?.role === 'player') {
+        try {
+          const favStatus = await apiClient.checkFavoriteStatus(data.club_id);
+          setIsFavorite(favStatus.is_favorite);
+        } catch (e) {
+          // Ignore error for favorite status check
+        }
+      }
     } catch (error) {
       console.error('Error fetching match:', error);
       Alert.alert('Errore', 'Impossibile caricare la partita');
@@ -178,6 +191,31 @@ export default function MatchDetailScreen() {
       case 'completed': return COLORS.textMuted;
       case 'cancelled': return COLORS.error;
       default: return COLORS.textMuted;
+    }
+  };
+
+  const toggleFavorite = async () => {
+    if (!match?.club_id || user?.role !== 'player') return;
+    
+    setFavoriteLoading(true);
+    lightHaptic();
+    
+    try {
+      if (isFavorite) {
+        await apiClient.removeFavoriteClub(match.club_id);
+        setIsFavorite(false);
+      } else {
+        await apiClient.addFavoriteClub(match.club_id);
+        setIsFavorite(true);
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      Alert.alert(
+        'Errore',
+        isFavorite ? 'Impossibile rimuovere dai preferiti' : 'Impossibile aggiungere ai preferiti'
+      );
+    } finally {
+      setFavoriteLoading(false);
     }
   };
 
@@ -313,7 +351,23 @@ export default function MatchDetailScreen() {
         {/* Club Info */}
         {match.club && (
           <Card style={styles.clubCard}>
-            <Text style={styles.clubCardTitle}>{t('my_club')}</Text>
+            <View style={styles.clubCardHeader}>
+              <Text style={styles.clubCardTitle}>{t('my_club')}</Text>
+              {user?.role === 'player' && (
+                <TouchableOpacity 
+                  onPress={toggleFavorite}
+                  disabled={favoriteLoading}
+                  style={styles.favoriteButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons 
+                    name={isFavorite ? "heart" : "heart-outline"} 
+                    size={24} 
+                    color={isFavorite ? COLORS.error : COLORS.textMuted} 
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
             <Text style={styles.clubInfoName}>{match.club.name}</Text>
             {match.club.address && (
               <View style={styles.clubInfoRow}>
@@ -611,10 +665,18 @@ const styles = StyleSheet.create({
   clubCard: {
     marginBottom: 16,
   },
+  clubCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   clubCardTitle: {
     fontSize: 14,
     color: COLORS.textMuted,
-    marginBottom: 8,
+  },
+  favoriteButton: {
+    padding: 4,
   },
   clubInfoName: {
     fontSize: 18,

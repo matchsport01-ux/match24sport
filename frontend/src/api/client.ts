@@ -187,6 +187,11 @@ class APIClient {
     return response.data;
   }
 
+  async getPlayerMyMatches(limit = 50, skip = 0) {
+    const response = await this.client.get('/player/my-matches', { params: { limit, skip } });
+    return response.data;
+  }
+
   // Clubs
   async registerClub(data: any) {
     const response = await this.client.post('/club/register', data);

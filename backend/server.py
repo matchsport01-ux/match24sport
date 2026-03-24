@@ -523,6 +523,145 @@ def calculate_elo_change(player_rating: int, opponent_rating: int, result: float
     expected = 1 / (1 + 10 ** ((opponent_rating - player_rating) / 400))
     return int(k * (result - expected))
 
+async def update_player_ratings_after_match(match_id: str):
+    """
+    Update player ratings after a match result is confirmed.
+    This function should be called by BOTH player confirmation and club confirmation.
+    """
+    result = await db.match_results.find_one({"match_id": match_id})
+    if not result:
+        logger.warning(f"No result found for match {match_id}")
+        return False
+    
+    # Check if ratings were already updated for this match
+    if result.get("ratings_updated"):
+        logger.info(f"Ratings already updated for match {match_id}")
+        return True
+    
+    match = await db.matches.find_one({"match_id": match_id})
+    if not match:
+        logger.warning(f"Match {match_id} not found")
+        return False
+    
+    sport = match["sport"]
+    winner_team = result.get("winner_team")
+    team_a_players = result.get("team_a_players", [])
+    team_b_players = result.get("team_b_players", [])
+    
+    if not team_a_players and not team_b_players:
+        logger.warning(f"No team players found for match {match_id}")
+        return False
+    
+    # Calculate average ratings for each team
+    async def get_team_avg_rating(player_ids):
+        total = 0
+        count = 0
+        for pid in player_ids:
+            rating = await db.player_ratings.find_one({"user_id": pid, "sport": sport})
+            if rating:
+                total += rating.get("rating", 1200)
+                count += 1
+            else:
+                total += 1200
+                count += 1
+        return total / count if count > 0 else 1200
+    
+    team_a_avg = await get_team_avg_rating(team_a_players)
+    team_b_avg = await get_team_avg_rating(team_b_players)
+    
+    logger.info(f"Updating ratings for match {match_id}: Team A avg={team_a_avg}, Team B avg={team_b_avg}, winner={winner_team}")
+    
+    # Update ratings for Team A players
+    for player_id in team_a_players:
+        current_rating = await db.player_ratings.find_one({"user_id": player_id, "sport": sport})
+        if not current_rating:
+            # Create rating if doesn't exist
+            current_rating = {"user_id": player_id, "sport": sport, "rating": 1200, "matches_played": 0, "wins": 0, "losses": 0}
+            await db.player_ratings.insert_one(current_rating)
+        
+        if winner_team == "A":
+            result_score = 1.0
+            win_inc, loss_inc = 1, 0
+        elif winner_team == "B":
+            result_score = 0.0
+            win_inc, loss_inc = 0, 1
+        else:
+            result_score = 0.5
+            win_inc, loss_inc = 0, 0
+        
+        rating_change = calculate_elo_change(current_rating["rating"], int(team_b_avg), result_score)
+        new_rating = current_rating["rating"] + rating_change
+        
+        await db.player_ratings.update_one(
+            {"user_id": player_id, "sport": sport},
+            {
+                "$set": {"rating": new_rating, "updated_at": datetime.now(timezone.utc)},
+                "$inc": {"matches_played": 1, "wins": win_inc, "losses": loss_inc}
+            }
+        )
+        
+        # Save rating history
+        history = {
+            "user_id": player_id,
+            "sport": sport,
+            "match_id": match_id,
+            "old_rating": current_rating["rating"],
+            "new_rating": new_rating,
+            "change": rating_change,
+            "created_at": datetime.now(timezone.utc)
+        }
+        await db.player_rating_history.insert_one(history)
+        logger.info(f"Updated rating for player {player_id}: {current_rating['rating']} -> {new_rating} ({rating_change:+d})")
+    
+    # Update ratings for Team B players
+    for player_id in team_b_players:
+        current_rating = await db.player_ratings.find_one({"user_id": player_id, "sport": sport})
+        if not current_rating:
+            current_rating = {"user_id": player_id, "sport": sport, "rating": 1200, "matches_played": 0, "wins": 0, "losses": 0}
+            await db.player_ratings.insert_one(current_rating)
+        
+        if winner_team == "B":
+            result_score = 1.0
+            win_inc, loss_inc = 1, 0
+        elif winner_team == "A":
+            result_score = 0.0
+            win_inc, loss_inc = 0, 1
+        else:
+            result_score = 0.5
+            win_inc, loss_inc = 0, 0
+        
+        rating_change = calculate_elo_change(current_rating["rating"], int(team_a_avg), result_score)
+        new_rating = current_rating["rating"] + rating_change
+        
+        await db.player_ratings.update_one(
+            {"user_id": player_id, "sport": sport},
+            {
+                "$set": {"rating": new_rating, "updated_at": datetime.now(timezone.utc)},
+                "$inc": {"matches_played": 1, "wins": win_inc, "losses": loss_inc}
+            }
+        )
+        
+        history = {
+            "user_id": player_id,
+            "sport": sport,
+            "match_id": match_id,
+            "old_rating": current_rating["rating"],
+            "new_rating": new_rating,
+            "change": rating_change,
+            "created_at": datetime.now(timezone.utc)
+        }
+        await db.player_rating_history.insert_one(history)
+        logger.info(f"Updated rating for player {player_id}: {current_rating['rating']} -> {new_rating} ({rating_change:+d})")
+    
+    # Mark ratings as updated to prevent double updates
+    await db.match_results.update_one(
+        {"match_id": match_id},
+        {"$set": {"ratings_updated": True, "ratings_updated_at": datetime.now(timezone.utc)}}
+    )
+    
+    logger.info(f"Successfully updated all ratings for match {match_id}")
+    return True
+
 # ======================= AUTH ENDPOINTS =======================
 
 @api_router.post("/auth/register", response_model=TokenResponse)
@@ -915,6 +1054,80 @@ async def get_player_match_history(
     
     return confirmed_matches
 
+@api_router.get("/player/my-matches")
+async def get_player_my_matches(
+    user: dict = Depends(get_current_user),
+    limit: int = Query(50, ge=1, le=100),
+    skip: int = Query(0, ge=0)
+):
+    """
+    Get ALL matches where the player is registered (upcoming + past).
+    This is different from /player/history which only returns completed matches with confirmed results.
+    """
+    # Get all matches where user is a participant
+    participations = await db.match_participants.find(
+        {"user_id": user["user_id"]},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    match_ids = [p["match_id"] for p in participations]
+    
+    if not match_ids:
+        return {"upcoming": [], "past": []}
+    
+    # Get all matches
+    matches = await db.matches.find(
+        {"match_id": {"$in": match_ids}},
+        {"_id": 0}
+    ).sort("date", -1).to_list(limit)
+    
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    now_time = datetime.now(timezone.utc).strftime("%H:%M")
+    
+    upcoming = []
+    past = []
+    
+    for match in matches:
+        # Enrich with participants
+        participants = await db.match_participants.find(
+            {"match_id": match["match_id"]},
+            {"_id": 0}
+        ).to_list(20)
+        match["participants"] = participants
+        
+        # Add result if exists
+        result = await db.match_results.find_one(
+            {"match_id": match["match_id"]},
+            {"_id": 0}
+        )
+        if result:
+            match["result"] = result
+        
+        # Categorize as upcoming or past
+        match_date = match.get("date", "")
+        match_start_time = match.get("start_time", "00:00")
+        
+        # A match is upcoming if:
+        # 1. Its date is in the future, OR
+        # 2. Its date is today AND its start time hasn't passed yet
+        # Also must not be completed or cancelled
+        is_future_date = match_date > today
+        is_today_future_time = match_date == today and match_start_time > now_time
+        is_active_status = match.get("status") not in ["completed", "cancelled"]
+        
+        if (is_future_date or is_today_future_time) and is_active_status:
+            upcoming.append(match)
+        else:
+            past.append(match)
+    
+    # Sort upcoming by date ascending (nearest first)
+    upcoming.sort(key=lambda m: (m.get("date", ""), m.get("start_time", "")))
+    
+    # Sort past by date descending (most recent first)
+    past.sort(key=lambda m: (m.get("date", ""), m.get("start_time", "")), reverse=True)
+    
+    return {"upcoming": upcoming, "past": past}
+
 # ======================= CLUB ENDPOINTS =======================
 
 @api_router.post("/club/register")
@@ -1200,15 +1413,19 @@ async def list_matches(
     
     # Filter out past matches - only show today and future
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    query["date"] = {"$gte": today}
+    now_time = datetime.now(timezone.utc).strftime("%H:%M")
+    
+    if date:
+        # If specific date requested, use that instead
+        query["date"] = date
+    else:
+        # Default: only future matches
+        query["date"] = {"$gte": today}
     
     if city:
         query["club_city"] = {"$regex": city, "$options": "i"}
     if sport:
         query["sport"] = sport
-    if date:
-        # If specific date requested, use that instead
-        query["date"] = date
     if skill_level and skill_level != "all":
         query["$or"] = [{"skill_level": skill_level}, {"skill_level": "all"}]
     if club_id:
@@ -1216,15 +1433,27 @@ async def list_matches(
     
     matches = await db.matches.find(query, {"_id": 0}).sort("date", 1).skip(skip).limit(limit).to_list(limit)
     
-    # Enrich with participants
+    # Filter out today's matches that have already started
+    filtered_matches = []
     for match in matches:
+        match_date = match.get("date", "")
+        match_start_time = match.get("start_time", "00:00")
+        
+        # If match is today, check if start time has passed
+        if match_date == today:
+            if match_start_time <= now_time:
+                # Skip past matches from today
+                continue
+        
+        # Enrich with participants
         participants = await db.match_participants.find(
             {"match_id": match["match_id"]},
             {"_id": 0}
         ).to_list(20)
         match["participants"] = participants
+        filtered_matches.append(match)
     
-    return matches
+    return filtered_matches
 
 @api_router.get("/matches/{match_id}")
 async def get_match(match_id: str, request: Request):
@@ -1528,6 +1757,7 @@ async def submit_match_result(match_id: str, result_data: MatchResultSubmit, use
 
 @api_router.post("/matches/{match_id}/result/confirm")
 async def confirm_match_result(match_id: str, user: dict = Depends(get_current_user)):
+    """Player confirmation of match result"""
     # Verify user is participant
     is_participant = await db.match_participants.find_one({
         "match_id": match_id,
@@ -1557,7 +1787,7 @@ async def confirm_match_result(match_id: str, user: dict = Depends(get_current_u
     required_confirmations = min(2, len(participants))
     
     if len(result.get("confirmations", [])) >= required_confirmations:
-        # Mark result as confirmed and update ratings
+        # Mark result as confirmed
         await db.match_results.update_one(
             {"match_id": match_id},
             {"$set": {"status": "confirmed"}}
@@ -1568,119 +1798,28 @@ async def confirm_match_result(match_id: str, user: dict = Depends(get_current_u
             {"$set": {"status": "completed", "updated_at": datetime.now(timezone.utc)}}
         )
         
-        # Update ratings
+        # Update ratings using shared function
+        logger.info(f"Players confirmed result for match {match_id}, updating ratings...")
+        await update_player_ratings_after_match(match_id)
+        
+        # Notify all participants
         match = await db.matches.find_one({"match_id": match_id})
-        sport = match["sport"]
-        
-        winner_team = result["winner_team"]
-        team_a_players = result["team_a_players"]
-        team_b_players = result["team_b_players"]
-        
-        # Calculate average ratings for each team
-        async def get_team_avg_rating(player_ids):
-            total = 0
-            for pid in player_ids:
-                rating = await db.player_ratings.find_one({"user_id": pid, "sport": sport})
-                total += rating.get("rating", 1200) if rating else 1200
-            return total / len(player_ids) if player_ids else 1200
-        
-        team_a_avg = await get_team_avg_rating(team_a_players)
-        team_b_avg = await get_team_avg_rating(team_b_players)
-        
-        # Update ratings for each player
-        for player_id in team_a_players:
-            current_rating = await db.player_ratings.find_one({"user_id": player_id, "sport": sport})
-            if not current_rating:
-                continue
-            
-            if winner_team == "A":
-                result_score = 1.0
-                win_inc, loss_inc = 1, 0
-            elif winner_team == "B":
-                result_score = 0.0
-                win_inc, loss_inc = 0, 1
-            else:
-                result_score = 0.5
-                win_inc, loss_inc = 0, 0
-            
-            rating_change = calculate_elo_change(current_rating["rating"], int(team_b_avg), result_score)
-            new_rating = current_rating["rating"] + rating_change
-            
-            await db.player_ratings.update_one(
-                {"user_id": player_id, "sport": sport},
-                {
-                    "$set": {"rating": new_rating, "updated_at": datetime.now(timezone.utc)},
-                    "$inc": {"matches_played": 1, "wins": win_inc, "losses": loss_inc}
-                }
+        for p in participants:
+            await create_notification(
+                user_id=p["user_id"],
+                title="Risultato confermato!",
+                message=f"Il risultato della partita di {match['sport']} del {match['date']} è stato confermato ufficialmente",
+                notification_type=NOTIFICATION_TYPES["MATCH_RESULT_CONFIRMED"],
+                match_id=match_id
             )
-            
-            # Save rating history
-            history = {
-                "user_id": player_id,
-                "sport": sport,
-                "match_id": match_id,
-                "old_rating": current_rating["rating"],
-                "new_rating": new_rating,
-                "change": rating_change,
-                "created_at": datetime.now(timezone.utc)
-            }
-            await db.player_rating_history.insert_one(history)
-        
-        for player_id in team_b_players:
-            current_rating = await db.player_ratings.find_one({"user_id": player_id, "sport": sport})
-            if not current_rating:
-                continue
-            
-            if winner_team == "B":
-                result_score = 1.0
-                win_inc, loss_inc = 1, 0
-            elif winner_team == "A":
-                result_score = 0.0
-                win_inc, loss_inc = 0, 1
-            else:
-                result_score = 0.5
-                win_inc, loss_inc = 0, 0
-            
-            rating_change = calculate_elo_change(current_rating["rating"], int(team_a_avg), result_score)
-            new_rating = current_rating["rating"] + rating_change
-            
-            await db.player_ratings.update_one(
-                {"user_id": player_id, "sport": sport},
-                {
-                    "$set": {"rating": new_rating, "updated_at": datetime.now(timezone.utc)},
-                    "$inc": {"matches_played": 1, "wins": win_inc, "losses": loss_inc}
-                }
-            )
-            
-            history = {
-                "user_id": player_id,
-                "sport": sport,
-                "match_id": match_id,
-                "old_rating": current_rating["rating"],
-                "new_rating": new_rating,
-                "change": rating_change,
-                "created_at": datetime.now(timezone.utc)
-            }
-            await db.player_rating_history.insert_one(history)
         
         return {"message": "Result confirmed and ratings updated", "status": "confirmed"}
-    
-    # Notify all participants when result is confirmed
-    match = await db.matches.find_one({"match_id": match_id})
-    for p in participants:
-        await create_notification(
-            user_id=p["user_id"],
-            title="Risultato confermato!",
-            message=f"Il risultato della partita di {match['sport']} del {match['date']} è stato confermato ufficialmente",
-            notification_type=NOTIFICATION_TYPES["MATCH_RESULT_CONFIRMED"],
-            match_id=match_id
-        )
     
     return {"message": "Confirmation added", "confirmations": len(result.get("confirmations", [])) + 1}
 
 @api_router.post("/club/matches/{match_id}/result/confirm")
 async def club_confirm_match_result(match_id: str, user: dict = Depends(get_current_user)):
-    """Endpoint for club admin to confirm match result - immediate confirmation"""
+    """Endpoint for club admin to confirm match result - immediate confirmation WITH rating update"""
     match = await db.matches.find_one({"match_id": match_id})
     if not match:
         raise HTTPException(status_code=404, detail="Match not found")
@@ -1708,6 +1847,12 @@ async def club_confirm_match_result(match_id: str, user: dict = Depends(get_curr
         {"$set": {"status": "completed", "updated_at": datetime.now(timezone.utc)}}
     )
     
+    # CRITICAL: Update player ratings when club confirms
+    logger.info(f"Club confirmed result for match {match_id}, updating player ratings...")
+    ratings_updated = await update_player_ratings_after_match(match_id)
+    if not ratings_updated:
+        logger.warning(f"Failed to update ratings for match {match_id}")
+    
     # Notify all participants that result is confirmed
     participants = await db.match_participants.find({"match_id": match_id}).to_list(20)
     for p in participants:
@@ -1719,7 +1864,7 @@ async def club_confirm_match_result(match_id: str, user: dict = Depends(get_curr
             match_id=match_id
         )
     
-    return {"message": "Result confirmed by club", "status": "confirmed"}
+    return {"message": "Result confirmed by club", "status": "confirmed", "ratings_updated": ratings_updated}
 
 @api_router.get("/club/matches/pending-results")
 async def get_club_pending_results(user: dict = Depends(get_current_user)):
