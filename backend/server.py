@@ -1,5 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, Query
 from fastapi.responses import JSONResponse
+from fastapi.middleware.gzip import GZipMiddleware
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -17,13 +18,24 @@ import socketio
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from functools import lru_cache
+import json
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
+# MongoDB connection with connection pooling
 mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
+# Configure connection pool for optimal performance
+client = AsyncIOMotorClient(
+    mongo_url,
+    maxPoolSize=50,           # Maximum connections in pool
+    minPoolSize=10,           # Minimum connections maintained
+    maxIdleTimeMS=30000,      # Close idle connections after 30 seconds
+    serverSelectionTimeoutMS=5000,  # Fail fast if can't connect
+    connectTimeoutMS=5000,    # Connection timeout
+    socketTimeoutMS=30000,    # Socket timeout for operations
+)
 db = client[os.environ['DB_NAME']]
 
 # JWT Configuration
@@ -47,6 +59,18 @@ APP_NAME = os.environ.get('APP_NAME', 'Match Sport 24')
 # Create the main app
 app = FastAPI(title="Match Sport 24 API")
 
+# Add GZIP compression middleware - compresses responses > 500 bytes
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Socket.IO setup for real-time chat
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
 socket_app = socketio.ASGIApp(sio, app)
@@ -60,6 +84,48 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# ======================= IN-MEMORY CACHE =======================
+
+class SimpleCache:
+    """Simple in-memory cache with TTL support"""
+    def __init__(self):
+        self._cache: Dict[str, Any] = {}
+        self._expiry: Dict[str, datetime] = {}
+    
+    def get(self, key: str) -> Optional[Any]:
+        if key in self._cache:
+            if key in self._expiry and datetime.now(timezone.utc) > self._expiry[key]:
+                # Expired
+                del self._cache[key]
+                del self._expiry[key]
+                return None
+            return self._cache[key]
+        return None
+    
+    def set(self, key: str, value: Any, ttl_seconds: int = 300):
+        """Set a cache value with TTL (default 5 minutes)"""
+        self._cache[key] = value
+        self._expiry[key] = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
+    
+    def delete(self, key: str):
+        if key in self._cache:
+            del self._cache[key]
+        if key in self._expiry:
+            del self._expiry[key]
+    
+    def clear(self):
+        self._cache.clear()
+        self._expiry.clear()
+    
+    def invalidate_pattern(self, pattern: str):
+        """Delete all keys matching a pattern (simple string contains)"""
+        keys_to_delete = [k for k in self._cache.keys() if pattern in k]
+        for key in keys_to_delete:
+            self.delete(key)
+
+# Global cache instance
+cache = SimpleCache()
 
 # ======================= EMAIL FUNCTIONS =======================
 
@@ -890,6 +956,12 @@ async def update_my_club(club_data: ClubUpdate, user: dict = Depends(get_current
         raise HTTPException(status_code=404, detail="Club not found")
     
     club = await db.clubs.find_one({"admin_user_id": user["user_id"]}, {"_id": 0})
+    
+    # Invalidate cache
+    cache.invalidate_pattern("clubs_list")
+    cache.delete(f"club:{club['club_id']}")
+    cache.delete("cities_list")
+    
     return club
 
 @api_router.get("/clubs")
@@ -899,6 +971,12 @@ async def list_clubs(
     limit: int = Query(20, ge=1, le=100),
     skip: int = Query(0, ge=0)
 ):
+    # Cache key includes filters
+    cache_key = f"clubs_list:{city or 'all'}:{sport or 'all'}:{limit}:{skip}"
+    cached = cache.get(cache_key)
+    if cached:
+        return cached
+    
     query = {"is_active": True}
     if city:
         query["city"] = {"$regex": city, "$options": "i"}
@@ -916,10 +994,18 @@ async def list_clubs(
                 filtered_clubs.append(club)
         clubs = filtered_clubs
     
+    # Cache for 5 minutes
+    cache.set(cache_key, clubs, ttl_seconds=300)
     return clubs
 
 @api_router.get("/clubs/{club_id}")
 async def get_club(club_id: str):
+    # Cache individual club data for 2 minutes
+    cache_key = f"club:{club_id}"
+    cached = cache.get(cache_key)
+    if cached:
+        return cached
+    
     club = await db.clubs.find_one({"club_id": club_id}, {"_id": 0})
     if not club:
         raise HTTPException(status_code=404, detail="Club not found")
@@ -928,6 +1014,7 @@ async def get_club(club_id: str):
     courts = await db.courts.find({"club_id": club_id, "is_active": True}, {"_id": 0}).to_list(100)
     club["courts"] = courts
     
+    cache.set(cache_key, club, ttl_seconds=120)
     return club
 
 # ======================= COURT ENDPOINTS =======================
@@ -2061,17 +2148,25 @@ async def admin_update_user(user_id: str, request: Request, user: dict = Depends
 
 @api_router.get("/cities")
 async def get_cities():
-    """Get list of cities with clubs"""
+    """Get list of cities with clubs - cached for 10 minutes"""
+    cache_key = "cities_list"
+    cached = cache.get(cache_key)
+    if cached:
+        return cached
+    
     cities = await db.clubs.distinct("city")
-    return sorted([c for c in cities if c])
+    result = sorted([c for c in cities if c])
+    cache.set(cache_key, result, ttl_seconds=600)  # 10 minutes
+    return result
 
 @api_router.get("/sports")
 async def get_sports():
+    """Get available sports - cached indefinitely (static data)"""
     return SPORTS
 
 @api_router.get("/sports/durations")
 async def get_sports_durations():
-    """Get match duration in minutes for each sport"""
+    """Get match duration in minutes for each sport - static data"""
     return MATCH_DURATIONS
 
 # ======================= ADMIN ENDPOINTS =======================
@@ -2522,6 +2617,26 @@ async def get_db_stats(user: dict = Depends(get_current_user)):
         "chat_messages": await db.chat_messages.count_documents({}),
     }
     return stats
+
+@api_router.get("/admin/cache-stats")
+async def get_cache_stats(user: dict = Depends(get_current_user)):
+    """Get cache statistics"""
+    if user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    return {
+        "cached_keys": len(cache._cache),
+        "keys": list(cache._cache.keys())[:50],  # Show first 50 keys
+    }
+
+@api_router.post("/admin/cache-clear")
+async def clear_cache(user: dict = Depends(get_current_user)):
+    """Clear all cache"""
+    if user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    cache.clear()
+    return {"message": "Cache cleared"}
 
 # Mount socket app
 app.mount("/socket.io", socket_app)
