@@ -349,7 +349,7 @@ export default function MatchDetailScreen() {
         </Card>
 
         {/* Club Info */}
-        {match.club && (
+        {match.club ? (
           <Card style={styles.clubCard}>
             <View style={styles.clubCardHeader}>
               <Text style={styles.clubCardTitle}>{t('my_club')}</Text>
@@ -379,6 +379,33 @@ export default function MatchDetailScreen() {
               <View style={styles.clubInfoRow}>
                 <Ionicons name="call-outline" size={16} color={COLORS.textSecondary} />
                 <Text style={styles.clubInfoText}>{match.club.phone}</Text>
+              </View>
+            )}
+          </Card>
+        ) : (
+          <Card style={styles.clubCard}>
+            <View style={styles.clubCardHeader}>
+              <Text style={styles.clubCardTitle}>{t('my_club')}</Text>
+              {user?.role === 'player' && match.club_id && (
+                <TouchableOpacity 
+                  onPress={toggleFavorite}
+                  disabled={favoriteLoading}
+                  style={styles.favoriteButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons 
+                    name={isFavorite ? "heart" : "heart-outline"} 
+                    size={24} 
+                    color={isFavorite ? COLORS.error : COLORS.textMuted} 
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+            <Text style={styles.clubInfoName}>{match.club_name}</Text>
+            {match.club_city && (
+              <View style={styles.clubInfoRow}>
+                <Ionicons name="location-outline" size={16} color={COLORS.textSecondary} />
+                <Text style={styles.clubInfoText}>{match.club_city}</Text>
               </View>
             )}
           </Card>
