@@ -2275,6 +2275,95 @@ async def shutdown_db_client():
     client.close()
 
 @app.on_event("startup")
+async def startup_tasks():
+    """Initialize database indexes and demo accounts on startup"""
+    logger.info("=== Starting Match Sport 24 Backend ===")
+    
+    # Create database indexes for optimal performance
+    await create_database_indexes()
+    
+    # Create demo accounts
+    await startup_create_demo_accounts()
+    
+    # Cleanup past data
+    await cleanup_past_matches()
+    
+    logger.info("=== Startup completed ===")
+
+async def create_database_indexes():
+    """Create MongoDB indexes for optimal query performance"""
+    logger.info("Creating database indexes...")
+    
+    try:
+        # Users collection
+        await db.users.create_index("user_id", unique=True)
+        await db.users.create_index("email", unique=True)
+        await db.users.create_index("role")
+        
+        # Clubs collection
+        await db.clubs.create_index("club_id", unique=True)
+        await db.clubs.create_index("admin_user_id")
+        await db.clubs.create_index("city")
+        await db.clubs.create_index("is_active")
+        await db.clubs.create_index([("city", 1), ("is_active", 1)])
+        
+        # Courts collection
+        await db.courts.create_index("court_id", unique=True)
+        await db.courts.create_index("club_id")
+        await db.courts.create_index("sport")
+        await db.courts.create_index([("club_id", 1), ("is_active", 1)])
+        
+        # Matches collection - critical for search performance
+        await db.matches.create_index("match_id", unique=True)
+        await db.matches.create_index("club_id")
+        await db.matches.create_index("court_id")
+        await db.matches.create_index("status")
+        await db.matches.create_index("date")
+        await db.matches.create_index("sport")
+        await db.matches.create_index([("status", 1), ("date", 1)])  # Compound for filtering
+        await db.matches.create_index([("club_id", 1), ("date", 1)])
+        await db.matches.create_index([("sport", 1), ("status", 1), ("date", 1)])  # Search queries
+        
+        # Match participants
+        await db.match_participants.create_index([("match_id", 1), ("user_id", 1)], unique=True)
+        await db.match_participants.create_index("user_id")
+        await db.match_participants.create_index("match_id")
+        
+        # Match results
+        await db.match_results.create_index("match_id", unique=True)
+        await db.match_results.create_index("status")
+        await db.match_results.create_index([("status", 1), ("match_id", 1)])
+        
+        # Player ratings - critical for leaderboards
+        await db.player_ratings.create_index([("user_id", 1), ("sport", 1)], unique=True)
+        await db.player_ratings.create_index([("sport", 1), ("rating", -1)])  # Leaderboard query
+        
+        # Rating history
+        await db.player_rating_history.create_index("user_id")
+        await db.player_rating_history.create_index([("user_id", 1), ("sport", 1), ("created_at", -1)])
+        
+        # Notifications - important for quick retrieval
+        await db.notifications.create_index("user_id")
+        await db.notifications.create_index([("user_id", 1), ("is_read", 1)])
+        await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
+        
+        # Chat messages
+        await db.chat_messages.create_index("match_id")
+        await db.chat_messages.create_index([("match_id", 1), ("created_at", 1)])
+        
+        # Password resets - TTL index for automatic cleanup
+        await db.password_resets.create_index("token", unique=True)
+        await db.password_resets.create_index("expires_at", expireAfterSeconds=0)  # Auto-delete expired
+        
+        # Favorite clubs
+        await db.favorite_clubs.create_index([("user_id", 1), ("club_id", 1)], unique=True)
+        await db.favorite_clubs.create_index("user_id")
+        
+        logger.info("Database indexes created successfully!")
+        
+    except Exception as e:
+        logger.warning(f"Error creating indexes (may already exist): {e}")
+
 async def startup_create_demo_accounts():
     """Create demo accounts on startup if they don't exist"""
     logger.info("Checking demo accounts...")
@@ -2348,6 +2437,91 @@ async def cleanup_past_matches():
             completed_count += 1
     
     logger.info(f"Cleanup complete: {deleted_count} deleted, {completed_count} marked as completed")
+
+async def archive_old_data():
+    """Archive old data to keep main collections lean
+    This should be called periodically (e.g., weekly) via a cron job
+    """
+    from datetime import timedelta
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=90)
+    cutoff_str = cutoff_date.strftime("%Y-%m-%d")
+    
+    logger.info(f"Archiving data older than {cutoff_str}...")
+    
+    # Archive old completed matches (keep last 90 days in main collection)
+    old_matches = await db.matches.find({
+        "date": {"$lt": cutoff_str},
+        "status": "completed"
+    }).to_list(5000)
+    
+    if old_matches:
+        # Insert into archive collection
+        for match in old_matches:
+            match["archived_at"] = datetime.now(timezone.utc)
+        await db.matches_archive.insert_many(old_matches)
+        
+        # Delete from main collection
+        match_ids = [m["match_id"] for m in old_matches]
+        await db.matches.delete_many({"match_id": {"$in": match_ids}})
+        logger.info(f"Archived {len(old_matches)} old matches")
+    
+    # Archive old chat messages (older than 90 days)
+    old_messages = await db.chat_messages.find({
+        "created_at": {"$lt": cutoff_date}
+    }).to_list(10000)
+    
+    if old_messages:
+        for msg in old_messages:
+            msg["archived_at"] = datetime.now(timezone.utc)
+        await db.chat_messages_archive.insert_many(old_messages)
+        await db.chat_messages.delete_many({"created_at": {"$lt": cutoff_date}})
+        logger.info(f"Archived {len(old_messages)} old chat messages")
+    
+    # Archive old notifications (older than 30 days and read)
+    notif_cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    old_notifs = await db.notifications.find({
+        "created_at": {"$lt": notif_cutoff},
+        "is_read": True
+    }).to_list(10000)
+    
+    if old_notifs:
+        for notif in old_notifs:
+            notif["archived_at"] = datetime.now(timezone.utc)
+        await db.notifications_archive.insert_many(old_notifs)
+        await db.notifications.delete_many({
+            "created_at": {"$lt": notif_cutoff},
+            "is_read": True
+        })
+        logger.info(f"Archived {len(old_notifs)} old notifications")
+    
+    logger.info("Archive process completed")
+
+@api_router.post("/admin/archive-old-data")
+async def trigger_archive(user: dict = Depends(get_current_user)):
+    """Admin endpoint to manually trigger data archival"""
+    if user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    await archive_old_data()
+    return {"message": "Archive process completed"}
+
+@api_router.get("/admin/db-stats")
+async def get_db_stats(user: dict = Depends(get_current_user)):
+    """Get database statistics for monitoring"""
+    if user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    stats = {
+        "users": await db.users.count_documents({}),
+        "clubs": await db.clubs.count_documents({}),
+        "courts": await db.courts.count_documents({}),
+        "matches_active": await db.matches.count_documents({"status": {"$in": ["open", "full"]}}),
+        "matches_completed": await db.matches.count_documents({"status": "completed"}),
+        "matches_archived": await db.matches_archive.count_documents({}) if "matches_archive" in await db.list_collection_names() else 0,
+        "notifications_unread": await db.notifications.count_documents({"is_read": False}),
+        "chat_messages": await db.chat_messages.count_documents({}),
+    }
+    return stats
 
 # Mount socket app
 app.mount("/socket.io", socket_app)
