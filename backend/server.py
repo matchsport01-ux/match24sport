@@ -882,6 +882,9 @@ async def get_player_match_history(
     limit: int = Query(20, ge=1, le=100),
     skip: int = Query(0, ge=0)
 ):
+    """
+    Get player's match history - ONLY completed matches with confirmed results
+    """
     # Get all matches where user participated
     participations = await db.match_participants.find(
         {"user_id": user["user_id"]},
@@ -890,17 +893,27 @@ async def get_player_match_history(
     
     match_ids = [p["match_id"] for p in participations]
     
+    # Only get matches that are completed AND have confirmed result
     matches = await db.matches.find(
-        {"match_id": {"$in": match_ids}},
+        {
+            "match_id": {"$in": match_ids},
+            "status": "completed"  # Only completed matches
+        },
         {"_id": 0}
     ).sort("date", -1).skip(skip).limit(limit).to_list(limit)
     
-    # Enrich with results
+    # Filter further: only include matches with confirmed results
+    confirmed_matches = []
     for match in matches:
-        result = await db.match_results.find_one({"match_id": match["match_id"]}, {"_id": 0})
-        match["result"] = result
+        result = await db.match_results.find_one(
+            {"match_id": match["match_id"], "status": "confirmed"},  # Only confirmed results
+            {"_id": 0}
+        )
+        if result:
+            match["result"] = result
+            confirmed_matches.append(match)
     
-    return matches
+    return confirmed_matches
 
 # ======================= CLUB ENDPOINTS =======================
 
@@ -1367,15 +1380,33 @@ async def update_match(match_id: str, match_data: MatchUpdate, user: dict = Depe
 async def get_club_matches(
     user: dict = Depends(get_current_user),
     status: Optional[str] = None,
+    include_past: bool = False,
     limit: int = Query(50, ge=1, le=100)
 ):
+    """
+    Get club matches.
+    - For open/full: only show today and future
+    - For completed: show all (history with confirmed results)
+    """
     club = await db.clubs.find_one({"admin_user_id": user["user_id"]})
     if not club:
         raise HTTPException(status_code=403, detail="Not a club admin")
     
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     query = {"club_id": club["club_id"]}
+    
     if status:
         query["status"] = status
+        # For open/full matches, only show future
+        if status in ["open", "full"] and not include_past:
+            query["date"] = {"$gte": today}
+    else:
+        # Default: show only current/future open and full matches
+        if not include_past:
+            query["$or"] = [
+                {"status": "completed"},  # All completed
+                {"status": {"$in": ["open", "full"]}, "date": {"$gte": today}}  # Future open/full
+            ]
     
     matches = await db.matches.find(query, {"_id": 0}).sort("date", 1).limit(limit).to_list(limit)
     
@@ -1385,6 +1416,10 @@ async def get_club_matches(
             {"_id": 0}
         ).to_list(20)
         match["participants"] = participants
+        
+        # Get result if exists
+        result = await db.match_results.find_one({"match_id": match["match_id"]}, {"_id": 0})
+        match["result"] = result
     
     return matches
 
@@ -2499,37 +2534,72 @@ async def startup_create_demo_accounts():
     await cleanup_past_matches()
 
 async def cleanup_past_matches():
-    """Delete unfilled past matches and mark filled past matches as completed"""
+    """
+    Clean up past matches with proper logic:
+    1. Matches that were "full" but past → mark as "completed"
+    2. Matches that were "open" (not full) and past → DELETE completely (not archived)
+    3. Only matches with confirmed results go to player history
+    """
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     logger.info(f"Cleaning up past matches (before {today})...")
     
-    # Find all past matches that are still "open"
+    deleted_count = 0
+    completed_count = 0
+    
+    # 1. Find all past matches that are "open" (not enough players) - DELETE THEM
     past_open_matches = await db.matches.find({
         "date": {"$lt": today},
         "status": "open"
     }).to_list(1000)
     
-    deleted_count = 0
-    completed_count = 0
-    
     for match in past_open_matches:
+        match_id = match.get("match_id")
+        # Delete the match and all related data completely - NOT archived
+        await db.matches.delete_one({"match_id": match_id})
+        await db.match_participants.delete_many({"match_id": match_id})
+        await db.chat_messages.delete_many({"match_id": match_id})
+        await db.match_results.delete_many({"match_id": match_id})
+        deleted_count += 1
+    
+    # 2. Find all past matches that are "full" but not yet "completed" - mark as completed
+    past_full_matches = await db.matches.find({
+        "date": {"$lt": today},
+        "status": "full"
+    }).to_list(1000)
+    
+    for match in past_full_matches:
+        match_id = match.get("match_id")
+        # Mark as completed so it appears in history
+        await db.matches.update_one(
+            {"match_id": match_id},
+            {"$set": {"status": "completed", "updated_at": datetime.now(timezone.utc)}}
+        )
+        completed_count += 1
+    
+    # 3. Clean up any stray "pending" or other status matches that are past
+    past_other_matches = await db.matches.find({
+        "date": {"$lt": today},
+        "status": {"$nin": ["open", "full", "completed", "cancelled"]}
+    }).to_list(1000)
+    
+    for match in past_other_matches:
         match_id = match.get("match_id")
         current_players = match.get("current_players", 0)
         max_players = match.get("max_players", 4)
         
-        if current_players < max_players:
-            # Match was not filled - delete it
-            await db.matches.delete_one({"match_id": match_id})
-            await db.match_participants.delete_many({"match_id": match_id})
-            await db.match_messages.delete_many({"match_id": match_id})
-            deleted_count += 1
-        else:
-            # Match was full - mark as completed
+        if current_players >= max_players:
+            # Was full - mark completed
             await db.matches.update_one(
                 {"match_id": match_id},
                 {"$set": {"status": "completed"}}
             )
             completed_count += 1
+        else:
+            # Was not full - delete
+            await db.matches.delete_one({"match_id": match_id})
+            await db.match_participants.delete_many({"match_id": match_id})
+            await db.chat_messages.delete_many({"match_id": match_id})
+            deleted_count += 1
     
     logger.info(f"Cleanup complete: {deleted_count} deleted, {completed_count} marked as completed")
 
