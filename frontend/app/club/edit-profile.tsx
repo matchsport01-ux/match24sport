@@ -12,18 +12,20 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { Button, Card } from '../../src/components';
+import { Button, Card, LoadingSpinner } from '../../src/components';
 import { useLanguage } from '../../src/contexts/LanguageContext';
+import { useAuth } from '../../src/contexts/AuthContext';
 import { COLORS } from '../../src/utils/constants';
 import { apiClient } from '../../src/api/client';
 import { Club } from '../../src/types';
-import { successHaptic } from '../../src/utils/haptics';
+import { successHaptic, lightHaptic, errorHaptic } from '../../src/utils/haptics';
 
 // Custom Input that works better on iOS for all fields
 function ClubInput({ 
@@ -116,6 +118,7 @@ const inputStyles = StyleSheet.create({
 export default function EditClubProfileScreen() {
   const router = useRouter();
   const { t } = useLanguage();
+  const { deleteAccount } = useAuth();
 
   const [club, setClub] = useState<Club | null>(null);
   const [name, setName] = useState('');
@@ -129,6 +132,13 @@ export default function EditClubProfileScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  
+  // Delete Account State
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [showDeletePassword, setShowDeletePassword] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => {
     fetchClub();
@@ -286,6 +296,73 @@ export default function EditClubProfileScreen() {
     }
   };
 
+  // Delete Account Functions
+  const handleOpenDeleteModal = () => {
+    lightHaptic();
+    setShowDeleteModal(true);
+    setDeletePassword('');
+    setDeleteError('');
+  };
+
+  const handleCloseDeleteModal = () => {
+    lightHaptic();
+    setShowDeleteModal(false);
+    setDeletePassword('');
+    setDeleteError('');
+    setIsDeleting(false);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!deletePassword.trim()) {
+      setDeleteError('Inserisci la password per confermare.');
+      errorHaptic();
+      return;
+    }
+
+    Alert.alert(
+      'Elimina Account',
+      'ATTENZIONE: Eliminando l\'account del circolo, tutti i dati associati verranno rimossi. Questa azione è PERMANENTE. Sei sicuro?',
+      [
+        { text: 'Annulla', style: 'cancel' },
+        {
+          text: 'Elimina Account',
+          style: 'destructive',
+          onPress: async () => {
+            setIsDeleting(true);
+            setDeleteError('');
+            
+            try {
+              const result = await deleteAccount(deletePassword);
+              
+              if (result.success) {
+                successHaptic();
+                setShowDeleteModal(false);
+                
+                Alert.alert(
+                  'Account Eliminato',
+                  'Il tuo account è stato eliminato con successo.',
+                  [{ text: 'OK', onPress: () => router.replace('/') }]
+                );
+              }
+            } catch (err: any) {
+              errorHaptic();
+              
+              if (err.response?.status === 401) {
+                setDeleteError('Password non corretta. Riprova.');
+              } else if (err.response?.data?.detail) {
+                setDeleteError(err.response.data.detail);
+              } else {
+                setDeleteError('Errore durante l\'eliminazione. Riprova più tardi.');
+              }
+            } finally {
+              setIsDeleting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -414,8 +491,118 @@ export default function EditClubProfileScreen() {
             size="large"
             style={styles.saveButton}
           />
+
+          {/* Danger Zone - Delete Account */}
+          <View style={styles.dangerZone}>
+            <Text style={styles.dangerZoneTitle}>Zona Pericolosa</Text>
+            <Text style={styles.dangerZoneDescription}>
+              L'eliminazione dell'account è permanente. Tutti i dati del circolo e le partite associate verranno rimossi.
+            </Text>
+            <TouchableOpacity
+              style={styles.deleteAccountButton}
+              onPress={handleOpenDeleteModal}
+            >
+              <Ionicons name="trash-outline" size={20} color={COLORS.error} />
+              <Text style={styles.deleteAccountButtonText}>Elimina Account</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Delete Account Modal */}
+      <Modal
+        visible={showDeleteModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={handleCloseDeleteModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={styles.warningIcon}>
+                <Ionicons name="warning" size={32} color={COLORS.error} />
+              </View>
+              <Text style={styles.modalTitle}>Elimina Account</Text>
+              <Text style={styles.modalSubtitle}>
+                Questa azione è permanente e non può essere annullata.
+              </Text>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.modalInfoTitle}>Cosa succederà:</Text>
+              <View style={styles.modalInfoRow}>
+                <Ionicons name="business-outline" size={16} color={COLORS.error} />
+                <Text style={styles.modalInfoText}>Il tuo circolo verrà disattivato</Text>
+              </View>
+              <View style={styles.modalInfoRow}>
+                <Ionicons name="calendar-outline" size={16} color={COLORS.error} />
+                <Text style={styles.modalInfoText}>Le partite future verranno cancellate</Text>
+              </View>
+              <View style={styles.modalInfoRow}>
+                <Ionicons name="person-remove-outline" size={16} color={COLORS.error} />
+                <Text style={styles.modalInfoText}>Il tuo account verrà eliminato</Text>
+              </View>
+
+              <Text style={styles.passwordLabel}>Conferma la tua password</Text>
+              <View style={styles.passwordInputContainer}>
+                <Ionicons name="lock-closed-outline" size={20} color={COLORS.textMuted} />
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Password"
+                  placeholderTextColor={COLORS.textMuted}
+                  value={deletePassword}
+                  onChangeText={(text) => {
+                    setDeletePassword(text);
+                    setDeleteError('');
+                  }}
+                  secureTextEntry={!showDeletePassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isDeleting}
+                />
+                <TouchableOpacity onPress={() => setShowDeletePassword(!showDeletePassword)}>
+                  <Ionicons
+                    name={showDeletePassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color={COLORS.textMuted}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {deleteError ? (
+                <View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={16} color={COLORS.error} />
+                  <Text style={styles.errorText}>{deleteError}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={handleCloseDeleteModal}
+                disabled={isDeleting}
+              >
+                <Text style={styles.cancelButtonText}>Annulla</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.confirmDeleteButton,
+                  (!deletePassword.trim() || isDeleting) && styles.confirmDeleteButtonDisabled
+                ]}
+                onPress={handleDeleteAccount}
+                disabled={!deletePassword.trim() || isDeleting}
+              >
+                {isDeleting ? (
+                  <ActivityIndicator size="small" color={COLORS.text} />
+                ) : (
+                  <Text style={styles.confirmDeleteButtonText}>Elimina Account</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -512,5 +699,170 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     marginTop: 8,
+  },
+  // Danger Zone Styles
+  dangerZone: {
+    marginTop: 40,
+    paddingTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.error + '30',
+  },
+  dangerZoneTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.error,
+    marginBottom: 8,
+  },
+  dangerZoneDescription: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  deleteAccountButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.error,
+    backgroundColor: COLORS.error + '10',
+  },
+  deleteAccountButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.error,
+    marginLeft: 8,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    alignItems: 'center',
+    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  warningIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: COLORS.error + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.error,
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  modalBody: {
+    padding: 20,
+  },
+  modalInfoTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 12,
+  },
+  modalInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  modalInfoText: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginLeft: 10,
+  },
+  passwordLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  passwordInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  passwordInput: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.text,
+    marginLeft: 10,
+    marginRight: 10,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  errorText: {
+    fontSize: 13,
+    color: COLORS.error,
+    marginLeft: 6,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    gap: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: COLORS.surfaceLight,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  confirmDeleteButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: COLORS.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmDeleteButtonDisabled: {
+    backgroundColor: COLORS.error + '50',
+  },
+  confirmDeleteButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
   },
 });

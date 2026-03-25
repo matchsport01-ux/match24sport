@@ -610,6 +610,35 @@ agent_communication:
       Screenshots verified landing, login, register, and search pages render correctly.
   - agent: "testing"
     message: |
+      DELETE ACCOUNT ENDPOINT REFACTORING VERIFICATION COMPLETED - 100% SUCCESS RATE (6/6 TESTS PASSED)
+      
+      🎯 REVIEW REQUEST TESTING RESULTS:
+      ✅ TEST 1: Create Test User - User registration working with unique email (delete_test_final_5513c0ed@test.com)
+      ✅ TEST 2: Verify User Exists - GET /api/auth/me endpoint working correctly
+      ✅ TEST 3: Delete Wrong Password - DELETE /api/auth/delete-account returns 401 "Incorrect password"
+      ✅ TEST 4: Delete Correct Password - DELETE /api/auth/delete-account returns 200 with success:true
+      ✅ TEST 5: Verify Login After Deletion - Login fails with 401 "Invalid credentials"
+      ✅ TEST 6: Verify Token Invalid - Old token returns 401 "User not found" (correct behavior)
+      
+      🔧 BACKEND LOGS VERIFICATION:
+      - Account deletion process logged correctly in backend
+      - All user data properly deleted/anonymized as per GDPR compliance
+      - Push tokens, favorites, notifications, participations, profile all removed
+      - Chat messages and ratings anonymized (preserving match history integrity)
+      - Complete deletion workflow: user_07fd150381f8 successfully deleted
+      
+      🏆 APPLE GUIDELINE 5.1.1(v) COMPLIANCE VERIFIED:
+      - Account deletion endpoint working correctly after refactoring
+      - Password verification security measure working
+      - Confirmation requirement ("DELETE") working
+      - Complete data deletion/anonymization verified
+      - User sessions invalidated after deletion
+      - Login attempts fail after account deletion
+      
+      Base URL: https://padel-finder-app.preview.emergentagent.com/api
+      DELETE ACCOUNT FEATURE IS FULLY FUNCTIONAL AFTER REFACTORING
+  - agent: "testing"
+    message: |
       DELETE ACCOUNT FEATURE TESTING COMPLETED - 100% SUCCESS RATE (6/6 TESTS PASSED)
       
       🎯 APPLE APP STORE COMPLIANCE VERIFICATION:
@@ -1237,5 +1266,8 @@ agent_communication:
       - working: true
         agent: "testing"
         comment: "COMPREHENSIVE DELETE ACCOUNT TESTING COMPLETED - 100% SUCCESS RATE (6/6 tests passed). ✅ Test user creation working correctly with unique email generation. ✅ User verification via /api/auth/me endpoint working. ✅ DELETE /api/auth/delete-account with wrong password correctly returns 401 'Incorrect password'. ✅ DELETE /api/auth/delete-account with correct password returns 200 with success:true and proper deletion message. ✅ Login after deletion correctly fails with 401 'Invalid credentials'. ✅ Old token invalidation working - returns 401 'User not found' (correct since user was deleted). FIXED CRITICAL BUG: Changed bcrypt.checkpw to verify_password function in delete account endpoint. Complete deletion workflow verified: user creation → password verification → account deletion → login failure → token invalidation. Apple App Store Guideline 5.1.1(v) compliance VERIFIED."
+      - working: true
+        agent: "testing"
+        comment: "DELETE ACCOUNT ENDPOINT REFACTORING VERIFICATION COMPLETED - 100% SUCCESS RATE (6/6 tests passed). ✅ Created test user delete_test_final_5513c0ed@test.com successfully. ✅ User profile verification via GET /api/auth/me working correctly. ✅ DELETE /api/auth/delete-account with wrong password correctly rejected with 401 'Incorrect password'. ✅ DELETE /api/auth/delete-account with correct password and confirmation='DELETE' returns 200 with success:true and message 'Your account has been deleted successfully'. ✅ Login attempt after deletion correctly fails with 401 (user not found). ✅ Old authentication token correctly invalidated after deletion (401 response). Complete end-to-end deletion workflow verified after refactoring. All security measures working correctly: password verification, confirmation requirement, complete data deletion, session invalidation. DELETE ACCOUNT ENDPOINT IS FULLY FUNCTIONAL AFTER REFACTORING."
 
 agent_communication:

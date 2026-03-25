@@ -235,15 +235,6 @@ export default function PlayerProfileScreen() {
             <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => router.push('/player/delete-account')}
-          >
-            <Ionicons name="trash-outline" size={24} color={COLORS.error} />
-            <Text style={[styles.menuItemText, { color: COLORS.error }]}>Delete Account</Text>
-            <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
-          </TouchableOpacity>
-
           <TouchableOpacity style={[styles.menuItem, styles.logoutItem]} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={24} color={COLORS.error} />
             <Text style={[styles.menuItemText, { color: COLORS.error }]}>{t('logout')}</Text>

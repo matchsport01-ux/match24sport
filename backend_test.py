@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-Comprehensive Backend Testing for Match Sport 24 - Critical Production Fixes
-Testing the 4 critical areas mentioned in the review request:
-1. RATING UPDATE AFTER CLUB CONFIRMATION (BUG FIX)
-2. PLAYER MY-MATCHES ENDPOINT (NEW)
-3. FAVORITES SYSTEM
-4. PAST MATCH FILTERING
+Backend Testing for Match Sport 24 - DELETE ACCOUNT ENDPOINT TESTING
+Testing DELETE ACCOUNT endpoint after refactoring as per review request:
+1. Create new test user
+2. Delete account with correct password
+3. Verify user cannot login after deletion
 """
 
 import requests
@@ -534,21 +533,145 @@ class TestSession:
             
         return True
         
+    def test_delete_account_endpoint(self) -> bool:
+        """Test DELETE ACCOUNT endpoint after refactoring"""
+        print("\n🎯 DELETE ACCOUNT ENDPOINT TESTING")
+        
+        # Generate unique email for this test
+        import uuid
+        unique_id = str(uuid.uuid4())[:8]
+        test_email = f"delete_test_final_{unique_id}@test.com"
+        test_password = "DeleteTest123!"
+        test_name = "Final Delete Test"
+        
+        # Step 1: Create new test user
+        register_data = {
+            "email": test_email,
+            "password": test_password,
+            "name": test_name,
+            "role": "player"
+        }
+        
+        try:
+            response = self.session.post(f"{BASE_URL}/auth/register", json=register_data)
+            if response.status_code != 200:
+                self.log_test("Create Test User", "/auth/register", response.status_code, False, f"Failed to create user: {response.text}")
+                return False
+                
+            user_data = response.json()
+            test_token = user_data.get("access_token")
+            if not test_token:
+                self.log_test("Create Test User", "/auth/register", 200, False, "No access token in response")
+                return False
+                
+            self.log_test("Create Test User", "/auth/register", 200, True, f"Created user: {test_email}")
+            
+        except Exception as e:
+            self.log_test("Create Test User", "/auth/register", 0, False, f"Exception: {str(e)}")
+            return False
+            
+        # Step 2: Verify user exists by getting profile
+        try:
+            response = self.session.get(f"{BASE_URL}/auth/me", headers=self.get_headers(test_token))
+            if response.status_code != 200:
+                self.log_test("Verify User Exists", "/auth/me", response.status_code, False, f"Failed to get user profile: {response.text}")
+                return False
+                
+            user_profile = response.json()
+            if user_profile.get("email") != test_email:
+                self.log_test("Verify User Exists", "/auth/me", 200, False, f"Email mismatch: expected {test_email}, got {user_profile.get('email')}")
+                return False
+                
+            self.log_test("Verify User Exists", "/auth/me", 200, True, f"User profile verified: {user_profile.get('name')}")
+            
+        except Exception as e:
+            self.log_test("Verify User Exists", "/auth/me", 0, False, f"Exception: {str(e)}")
+            return False
+            
+        # Step 3: Test delete account with wrong password (should fail)
+        delete_data_wrong = {
+            "password": "WrongPassword123!",
+            "confirmation": "DELETE"
+        }
+        
+        try:
+            response = self.session.delete(f"{BASE_URL}/auth/delete-account", json=delete_data_wrong, headers=self.get_headers(test_token))
+            if response.status_code != 401:
+                self.log_test("Delete Wrong Password", "/auth/delete-account", response.status_code, False, f"Expected 401, got {response.status_code}: {response.text}")
+                return False
+                
+            self.log_test("Delete Wrong Password", "/auth/delete-account", 401, True, "Correctly rejected wrong password")
+            
+        except Exception as e:
+            self.log_test("Delete Wrong Password", "/auth/delete-account", 0, False, f"Exception: {str(e)}")
+            return False
+            
+        # Step 4: Delete account with correct password
+        delete_data_correct = {
+            "password": test_password,
+            "confirmation": "DELETE"
+        }
+        
+        try:
+            response = self.session.delete(f"{BASE_URL}/auth/delete-account", json=delete_data_correct, headers=self.get_headers(test_token))
+            if response.status_code != 200:
+                self.log_test("Delete Correct Password", "/auth/delete-account", response.status_code, False, f"Failed to delete account: {response.text}")
+                return False
+                
+            delete_response = response.json()
+            if not delete_response.get("success"):
+                self.log_test("Delete Correct Password", "/auth/delete-account", 200, False, f"Success flag is False: {delete_response}")
+                return False
+                
+            self.log_test("Delete Correct Password", "/auth/delete-account", 200, True, f"Account deleted successfully: {delete_response.get('message')}")
+            
+        except Exception as e:
+            self.log_test("Delete Correct Password", "/auth/delete-account", 0, False, f"Exception: {str(e)}")
+            return False
+            
+        # Step 5: Verify user cannot login after deletion
+        login_data = {
+            "email": test_email,
+            "password": test_password
+        }
+        
+        try:
+            response = self.session.post(f"{BASE_URL}/auth/login", json=login_data)
+            if response.status_code != 401:
+                self.log_test("Verify Login After Deletion", "/auth/login", response.status_code, False, f"Expected 401, got {response.status_code}: {response.text}")
+                return False
+                
+            self.log_test("Verify Login After Deletion", "/auth/login", 401, True, "Login correctly rejected after account deletion")
+            
+        except Exception as e:
+            self.log_test("Verify Login After Deletion", "/auth/login", 0, False, f"Exception: {str(e)}")
+            return False
+            
+        # Step 6: Verify old token is invalid
+        try:
+            response = self.session.get(f"{BASE_URL}/auth/me", headers=self.get_headers(test_token))
+            if response.status_code != 401:
+                self.log_test("Verify Token Invalid", "/auth/me", response.status_code, False, f"Expected 401, got {response.status_code}: {response.text}")
+                return False
+                
+            self.log_test("Verify Token Invalid", "/auth/me", 401, True, "Old token correctly invalidated after deletion")
+            
+        except Exception as e:
+            self.log_test("Verify Token Invalid", "/auth/me", 0, False, f"Exception: {str(e)}")
+            return False
+            
+        return True
+
     def run_all_tests(self):
         """Run all critical tests"""
-        print("🚀 STARTING COMPREHENSIVE BACKEND TESTING FOR MATCH SPORT 24")
+        print("🚀 STARTING DELETE ACCOUNT ENDPOINT TESTING FOR MATCH SPORT 24")
         print("=" * 80)
         print(f"Base URL: {BASE_URL}")
-        print(f"Player Credentials: {PLAYER_CREDENTIALS['email']}")
-        print(f"Club Admin Credentials: {CLUB_ADMIN_CREDENTIALS['email']}")
+        print("Testing DELETE ACCOUNT endpoint after refactoring")
         print("=" * 80)
         
         test_functions = [
-            ("Rating Update After Club Confirmation - Cycle 1", self.test_rating_update_after_club_confirmation_cycle_1),
-            ("Rating Update After Club Confirmation - Cycle 2", self.test_rating_update_after_club_confirmation_cycle_2),
-            ("Player My-Matches Endpoint", self.test_player_my_matches_endpoint),
-            ("Favorites System", self.test_favorites_system),
-            ("Past Match Filtering", self.test_past_match_filtering)
+            ("DELETE ACCOUNT Endpoint", self.test_delete_account_endpoint)
         ]
         
         passed_tests = 0
