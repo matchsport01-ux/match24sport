@@ -97,6 +97,19 @@ export default function ClubSettingsScreen() {
           </View>
         </View>
 
+        {/* Account Danger Zone */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account</Text>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push('/club/delete-account')}
+          >
+            <Ionicons name="trash-outline" size={24} color={COLORS.error} />
+            <Text style={[styles.menuItemText, { color: COLORS.error }]}>Delete Account</Text>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
+          </TouchableOpacity>
+        </View>
+
         {/* Logout */}
         <View style={styles.section}>
           <TouchableOpacity style={[styles.menuItem, styles.logoutItem]} onPress={handleLogout}>

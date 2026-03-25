@@ -6,6 +6,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import hashlib
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
@@ -851,6 +852,169 @@ async def logout(request: Request):
     response = JSONResponse(content={"message": "Logged out successfully"})
     response.delete_cookie(key="session_token", path="/")
     return response
+
+# ======================= ACCOUNT DELETION ENDPOINT (Apple Guideline 5.1.1(v)) =======================
+
+class DeleteAccountRequest(BaseModel):
+    password: str
+    confirmation: str = "DELETE"
+
+@api_router.delete("/auth/delete-account")
+async def delete_account(request: DeleteAccountRequest, user: dict = Depends(get_current_user)):
+    """
+    Permanently delete user account and all associated data.
+    Complies with Apple App Store Review Guideline 5.1.1(v).
+    
+    This endpoint:
+    1. Verifies the user's password for security
+    2. Deletes all personal data associated with the account
+    3. Removes the account from the authentication system
+    4. Preserves only data required for legal/compliance reasons
+    """
+    user_id = user["user_id"]
+    
+    # Step 1: Verify password
+    full_user = await db.users.find_one({"user_id": user_id})
+    if not full_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify password
+    if not verify_password(request.password, full_user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Incorrect password")
+    
+    # Step 2: Verify confirmation
+    if request.confirmation.upper() != "DELETE":
+        raise HTTPException(status_code=400, detail="Please confirm deletion by typing DELETE")
+    
+    logger.info(f"[ACCOUNT_DELETION] Starting deletion for user {user_id} ({user['email']})")
+    
+    try:
+        # Step 3: Delete all user data
+        
+        # 3a. Delete push notification tokens
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$unset": {"expo_push_token": ""}}
+        )
+        logger.info(f"[ACCOUNT_DELETION] Removed push tokens for user {user_id}")
+        
+        # 3b. Delete favorite clubs
+        deleted_favorites = await db.favorite_clubs.delete_many({"user_id": user_id})
+        logger.info(f"[ACCOUNT_DELETION] Deleted {deleted_favorites.deleted_count} favorite clubs")
+        
+        # 3c. Delete notifications
+        deleted_notifications = await db.notifications.delete_many({"user_id": user_id})
+        logger.info(f"[ACCOUNT_DELETION] Deleted {deleted_notifications.deleted_count} notifications")
+        
+        # 3d. Delete match participations
+        deleted_participations = await db.match_participants.delete_many({"user_id": user_id})
+        logger.info(f"[ACCOUNT_DELETION] Deleted {deleted_participations.deleted_count} match participations")
+        
+        # 3e. Anonymize chat messages (keep for match history integrity, but remove personal data)
+        await db.chat_messages.update_many(
+            {"user_id": user_id},
+            {"$set": {"user_id": "deleted_user", "user_name": "Utente eliminato"}}
+        )
+        logger.info(f"[ACCOUNT_DELETION] Anonymized chat messages for user {user_id}")
+        
+        # 3f. Anonymize match results (keep for rating history integrity)
+        await db.match_results.update_many(
+            {"submitted_by": user_id},
+            {"$set": {"submitted_by": "deleted_user"}}
+        )
+        
+        # 3g. Delete player profile
+        deleted_profile = await db.player_profiles.delete_one({"user_id": user_id})
+        logger.info(f"[ACCOUNT_DELETION] Deleted player profile: {deleted_profile.deleted_count}")
+        
+        # 3h. Anonymize player ratings (keep for historical rating calculations)
+        await db.player_ratings.update_many(
+            {"user_id": user_id},
+            {"$set": {
+                "user_id": f"deleted_{user_id[:8]}",
+                "anonymized": True,
+                "anonymized_at": datetime.now(timezone.utc)
+            }}
+        )
+        logger.info(f"[ACCOUNT_DELETION] Anonymized player ratings")
+        
+        # 3i. Anonymize rating history
+        await db.player_rating_history.update_many(
+            {"user_id": user_id},
+            {"$set": {
+                "user_id": f"deleted_{user_id[:8]}",
+                "anonymized": True
+            }}
+        )
+        
+        # 3j. Delete all user sessions
+        deleted_sessions = await db.user_sessions.delete_many({"user_id": user_id})
+        logger.info(f"[ACCOUNT_DELETION] Deleted {deleted_sessions.deleted_count} sessions")
+        
+        # 3k. Delete password reset tokens
+        await db.password_resets.delete_many({"user_id": user_id})
+        
+        # 3l. If user is a club admin, transfer or mark club
+        club = await db.clubs.find_one({"admin_user_id": user_id})
+        if club:
+            # Mark club as needing new admin
+            await db.clubs.update_one(
+                {"club_id": club["club_id"]},
+                {"$set": {
+                    "admin_user_id": None,
+                    "status": "inactive",
+                    "admin_deleted_at": datetime.now(timezone.utc),
+                    "needs_new_admin": True
+                }}
+            )
+            logger.info(f"[ACCOUNT_DELETION] Marked club {club['club_id']} as needing new admin")
+        
+        # Step 4: Finally delete the user account
+        deleted_user = await db.users.delete_one({"user_id": user_id})
+        
+        if deleted_user.deleted_count == 0:
+            logger.error(f"[ACCOUNT_DELETION] Failed to delete user {user_id}")
+            raise HTTPException(status_code=500, detail="Failed to delete account")
+        
+        logger.info(f"[ACCOUNT_DELETION] Successfully deleted account for user {user_id}")
+        
+        # Create audit log for legal compliance (anonymized)
+        await db.account_deletions.insert_one({
+            "deleted_at": datetime.now(timezone.utc),
+            "user_id_hash": hashlib.sha256(user_id.encode()).hexdigest(),
+            "email_domain": user["email"].split("@")[1] if "@" in user["email"] else "unknown",
+            "reason": "user_requested",
+            "data_deleted": [
+                "user_account",
+                "player_profile", 
+                "favorite_clubs",
+                "notifications",
+                "match_participations",
+                "sessions",
+                "password_reset_tokens"
+            ],
+            "data_anonymized": [
+                "chat_messages",
+                "player_ratings",
+                "rating_history",
+                "match_results"
+            ]
+        })
+        
+        return {
+            "success": True,
+            "message": "Your account has been deleted successfully.",
+            "details": "All your personal data has been removed. Some anonymized data may be retained for legal or fraud-prevention purposes."
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[ACCOUNT_DELETION] Error deleting account: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while deleting your account. Please try again or contact support."
+        )
 
 class PushTokenRequest(BaseModel):
     expo_push_token: str

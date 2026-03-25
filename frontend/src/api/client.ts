@@ -140,6 +140,15 @@ class APIClient {
     await this.clearToken();
   }
 
+  // Account Deletion (Apple Guideline 5.1.1(v) compliance)
+  async deleteAccount(password: string): Promise<{ success: boolean; message: string }> {
+    const response = await this.client.delete('/auth/delete-account', {
+      data: { password, confirmation: 'DELETE' }
+    });
+    await this.clearToken();
+    return response.data;
+  }
+
   // Password Reset
   async forgotPassword(email: string) {
     const response = await this.client.post('/auth/forgot-password', { email });

@@ -13,6 +13,7 @@ interface AuthContextType {
   register: (email: string, password: string, name: string, role?: string) => Promise<void>;
   googleAuth: (sessionId: string) => Promise<void>;
   logout: () => Promise<void>;
+  deleteAccount: (password: string) => Promise<{ success: boolean; message: string }>;
   refreshUser: () => Promise<void>;
 }
 
@@ -154,6 +155,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const deleteAccount = async (password: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const result = await apiClient.deleteAccount(password);
+      setUser(null);
+      return result;
+    } catch (error: any) {
+      console.error('Delete account error:', error);
+      throw error;
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -164,6 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         register,
         googleAuth,
         logout,
+        deleteAccount,
         refreshUser,
       }}
     >
