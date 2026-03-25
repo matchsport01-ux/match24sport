@@ -1,271 +1,325 @@
 #!/usr/bin/env python3
 """
-Backend API Testing for Match Sport 24 - IAP Subscription Endpoints
-Testing the NEW In-App Purchase (IAP) subscription endpoints
+IAP Subscription Backend Testing Script
+Tests the In-App Purchase subscription endpoints for Match Sport 24 app.
 """
 
 import requests
 import json
-import sys
-from datetime import datetime
+import uuid
+from datetime import datetime, timezone
 
 # Configuration
 BASE_URL = "https://padel-finder-app.preview.emergentagent.com/api"
-CLUB_ADMIN_EMAIL = "newclubtest6051@test.com"
-CLUB_ADMIN_PASSWORD = "TestPass123!"
 
-class Colors:
-    GREEN = '\033[92m'
-    RED = '\033[91m'
-    YELLOW = '\033[93m'
-    BLUE = '\033[94m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
+# Test credentials
+CLUB_USER = {
+    "email": "newclubtest6051@test.com",
+    "password": "TestPass123!"
+}
+
+APPLE_DEMO = {
+    "email": "reviewer@apple.com", 
+    "password": "AppleReview2024!"
+}
 
 def log_test(test_name, status, details=""):
-    """Log test results with colors"""
-    color = Colors.GREEN if status == "PASS" else Colors.RED
-    print(f"{color}[{status}]{Colors.ENDC} {Colors.BOLD}{test_name}{Colors.ENDC}")
+    """Log test results with timestamp"""
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    status_symbol = "✅" if status == "PASS" else "❌" if status == "FAIL" else "⚠️"
+    print(f"[{timestamp}] {status_symbol} {test_name}: {status}")
     if details:
         print(f"    {details}")
-    print()
 
-def make_request(method, endpoint, headers=None, data=None):
-    """Make HTTP request with error handling"""
-    url = f"{BASE_URL}{endpoint}"
+def login_user(credentials):
+    """Login and return access token"""
     try:
-        if method == "GET":
-            response = requests.get(url, headers=headers, timeout=30)
-        elif method == "POST":
-            response = requests.post(url, headers=headers, json=data, timeout=30)
-        elif method == "PUT":
-            response = requests.put(url, headers=headers, json=data, timeout=30)
-        elif method == "DELETE":
-            response = requests.delete(url, headers=headers, timeout=30)
+        response = requests.post(
+            f"{BASE_URL}/auth/login",
+            json=credentials,
+            headers={"Content-Type": "application/json"}
+        )
         
-        return response
-    except requests.exceptions.RequestException as e:
-        print(f"{Colors.RED}Request failed: {e}{Colors.ENDC}")
-        return None
-
-def test_club_admin_login():
-    """Test club admin login to get authentication token"""
-    print(f"{Colors.BLUE}=== TESTING CLUB ADMIN LOGIN ==={Colors.ENDC}")
-    
-    login_data = {
-        "email": CLUB_ADMIN_EMAIL,
-        "password": CLUB_ADMIN_PASSWORD
-    }
-    
-    response = make_request("POST", "/auth/login", data=login_data)
-    
-    if not response:
-        log_test("Club Admin Login", "FAIL", "Request failed")
-        return None
-    
-    if response.status_code == 200:
-        try:
+        if response.status_code == 200:
             data = response.json()
-            if "access_token" in data:
-                log_test("Club Admin Login", "PASS", f"Token received, user role: {data.get('user', {}).get('role', 'unknown')}")
-                return data["access_token"]
-            else:
-                log_test("Club Admin Login", "FAIL", "No access_token in response")
-                return None
-        except json.JSONDecodeError:
-            log_test("Club Admin Login", "FAIL", "Invalid JSON response")
+            return data.get("access_token")
+        else:
+            log_test(f"Login {credentials['email']}", "FAIL", f"Status: {response.status_code}, Response: {response.text}")
             return None
-    else:
-        log_test("Club Admin Login", "FAIL", f"HTTP {response.status_code}: {response.text}")
+    except Exception as e:
+        log_test(f"Login {credentials['email']}", "FAIL", f"Exception: {str(e)}")
         return None
 
-def test_iap_validate_endpoint(token):
-    """Test IAP Validate Endpoint"""
-    print(f"{Colors.BLUE}=== TEST 1: IAP VALIDATE ENDPOINT ==={Colors.ENDC}")
+def test_iap_validate_endpoint():
+    """Test POST /api/subscription/iap/validate endpoint"""
+    print("\n🎯 TESTING IAP VALIDATE ENDPOINT")
     
-    headers = {"Authorization": f"Bearer {token}"}
+    # Login as club user
+    token = login_user(CLUB_USER)
+    if not token:
+        log_test("IAP Validate - Login", "FAIL", "Could not login as club user")
+        return False
     
-    # Test data as specified in review request
-    iap_data = {
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    
+    # Test 1: iOS platform validation
+    ios_request = {
         "platform": "ios",
         "product_id": "com.matchsport24.subscription.monthly",
-        "transaction_id": "test_transaction_12345",
-        "receipt": "test_receipt_data",
+        "transaction_id": f"test_transaction_{uuid.uuid4().hex[:8]}",
+        "receipt": "test_receipt_data_ios",
         "plan_id": "monthly"
     }
     
-    response = make_request("POST", "/subscription/iap/validate", headers=headers, data=iap_data)
-    
-    if not response:
-        log_test("IAP Validate Endpoint", "FAIL", "Request failed")
-        return False
-    
-    print(f"    HTTP Status: {response.status_code}")
-    print(f"    Response: {response.text[:200]}...")
-    
-    if response.status_code == 200:
-        try:
+    try:
+        response = requests.post(
+            f"{BASE_URL}/subscription/iap/validate",
+            json=ios_request,
+            headers=headers
+        )
+        
+        if response.status_code == 200:
             data = response.json()
-            if data.get("success") == True:
-                log_test("IAP Validate Endpoint", "PASS", f"Success: {data.get('success')}, Subscription activated")
-                return True
+            if data.get("success") and "subscription_status" in data:
+                log_test("IAP Validate iOS", "PASS", f"Response: {json.dumps(data, indent=2)}")
+                return True, ios_request["transaction_id"]
             else:
-                log_test("IAP Validate Endpoint", "FAIL", f"Success field not true: {data}")
-                return False
-        except json.JSONDecodeError:
-            log_test("IAP Validate Endpoint", "FAIL", "Invalid JSON response")
-            return False
-    else:
-        log_test("IAP Validate Endpoint", "FAIL", f"HTTP {response.status_code}")
-        return False
-
-def test_iap_status_endpoint(token):
-    """Test IAP Status Endpoint"""
-    print(f"{Colors.BLUE}=== TEST 2: IAP STATUS ENDPOINT ==={Colors.ENDC}")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    response = make_request("GET", "/subscription/iap/status", headers=headers)
-    
-    if not response:
-        log_test("IAP Status Endpoint", "FAIL", "Request failed")
-        return False
-    
-    print(f"    HTTP Status: {response.status_code}")
-    print(f"    Response: {response.text[:300]}...")
-    
-    if response.status_code == 200:
-        try:
-            data = response.json()
-            required_fields = ["subscription_status", "subscription_plan", "is_active"]
-            missing_fields = [field for field in required_fields if field not in data]
+                log_test("IAP Validate iOS", "FAIL", f"Invalid response structure: {data}")
+                return False, None
+        else:
+            log_test("IAP Validate iOS", "FAIL", f"Status: {response.status_code}, Response: {response.text}")
+            return False, None
             
-            if not missing_fields:
-                log_test("IAP Status Endpoint", "PASS", f"All required fields present: {required_fields}")
-                return True
-            else:
-                log_test("IAP Status Endpoint", "FAIL", f"Missing fields: {missing_fields}")
-                return False
-        except json.JSONDecodeError:
-            log_test("IAP Status Endpoint", "FAIL", "Invalid JSON response")
-            return False
-    else:
-        log_test("IAP Status Endpoint", "FAIL", f"HTTP {response.status_code}")
-        return False
+    except Exception as e:
+        log_test("IAP Validate iOS", "FAIL", f"Exception: {str(e)}")
+        return False, None
 
-def test_iap_restore_endpoint(token):
-    """Test IAP Restore Endpoint"""
-    print(f"{Colors.BLUE}=== TEST 3: IAP RESTORE ENDPOINT ==={Colors.ENDC}")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    response = make_request("POST", "/subscription/iap/restore", headers=headers)
-    
-    if not response:
-        log_test("IAP Restore Endpoint", "FAIL", "Request failed")
+def test_iap_validate_android():
+    """Test Android platform validation"""
+    token = login_user(CLUB_USER)
+    if not token:
         return False
     
-    print(f"    HTTP Status: {response.status_code}")
-    print(f"    Response: {response.text[:300]}...")
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
     
-    if response.status_code == 200:
-        try:
-            data = response.json()
-            # Should return subscription info or "no purchases to restore" message
-            if "subscription_status" in data or "message" in data:
-                log_test("IAP Restore Endpoint", "PASS", "Valid response structure")
-                return True
-            else:
-                log_test("IAP Restore Endpoint", "FAIL", f"Unexpected response structure: {data}")
-                return False
-        except json.JSONDecodeError:
-            log_test("IAP Restore Endpoint", "FAIL", "Invalid JSON response")
-            return False
-    else:
-        log_test("IAP Restore Endpoint", "FAIL", f"HTTP {response.status_code}")
-        return False
-
-def test_duplicate_transaction_prevention(token):
-    """Test Duplicate Transaction Prevention"""
-    print(f"{Colors.BLUE}=== TEST 4: DUPLICATE TRANSACTION PREVENTION ==={Colors.ENDC}")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    # Same test data as first test to check duplicate prevention
-    iap_data = {
-        "platform": "ios",
+    # Test Android platform validation
+    android_request = {
+        "platform": "android",
         "product_id": "com.matchsport24.subscription.monthly",
-        "transaction_id": "test_transaction_12345",  # Same transaction ID
-        "receipt": "test_receipt_data",
+        "transaction_id": f"test_transaction_android_{uuid.uuid4().hex[:8]}",
+        "receipt": "test_purchase_token_android",
         "plan_id": "monthly"
     }
     
-    response = make_request("POST", "/subscription/iap/validate", headers=headers, data=iap_data)
-    
-    if not response:
-        log_test("Duplicate Transaction Prevention", "FAIL", "Request failed")
-        return False
-    
-    print(f"    HTTP Status: {response.status_code}")
-    print(f"    Response: {response.text[:300]}...")
-    
-    if response.status_code == 200:
-        try:
+    try:
+        response = requests.post(
+            f"{BASE_URL}/subscription/iap/validate",
+            json=android_request,
+            headers=headers
+        )
+        
+        if response.status_code == 200:
             data = response.json()
-            if data.get("already_processed") == True:
-                log_test("Duplicate Transaction Prevention", "PASS", "Duplicate transaction correctly detected")
+            if data.get("success") and "subscription_status" in data:
+                log_test("IAP Validate Android", "PASS", f"Platform: {android_request['platform']}, Plan: {android_request['plan_id']}")
                 return True
             else:
-                log_test("Duplicate Transaction Prevention", "FAIL", f"Expected already_processed: true, got: {data}")
+                log_test("IAP Validate Android", "FAIL", f"Invalid response structure: {data}")
                 return False
-        except json.JSONDecodeError:
-            log_test("Duplicate Transaction Prevention", "FAIL", "Invalid JSON response")
+        else:
+            log_test("IAP Validate Android", "FAIL", f"Status: {response.status_code}, Response: {response.text}")
             return False
-    else:
-        log_test("Duplicate Transaction Prevention", "FAIL", f"HTTP {response.status_code}")
+            
+    except Exception as e:
+        log_test("IAP Validate Android", "FAIL", f"Exception: {str(e)}")
+        return False
+
+def test_iap_status_endpoint():
+    """Test GET /api/subscription/iap/status endpoint"""
+    print("\n🎯 TESTING IAP STATUS ENDPOINT")
+    
+    token = login_user(CLUB_USER)
+    if not token:
+        log_test("IAP Status - Login", "FAIL", "Could not login as club user")
+        return False
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        response = requests.get(
+            f"{BASE_URL}/subscription/iap/status",
+            headers=headers
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            required_fields = ["subscription_status", "subscription_plan", "subscription_expires_at", "subscription_source", "is_active"]
+            
+            if all(field in data for field in required_fields):
+                log_test("IAP Status", "PASS", f"All required fields present: {list(data.keys())}")
+                log_test("IAP Status Details", "INFO", f"Status: {data.get('subscription_status')}, Plan: {data.get('subscription_plan')}, Active: {data.get('is_active')}")
+                return True
+            else:
+                missing_fields = [field for field in required_fields if field not in required_fields]
+                log_test("IAP Status", "FAIL", f"Missing fields: {missing_fields}")
+                return False
+        else:
+            log_test("IAP Status", "FAIL", f"Status: {response.status_code}, Response: {response.text}")
+            return False
+            
+    except Exception as e:
+        log_test("IAP Status", "FAIL", f"Exception: {str(e)}")
+        return False
+
+def test_iap_restore_endpoint():
+    """Test POST /api/subscription/iap/restore endpoint"""
+    print("\n🎯 TESTING IAP RESTORE ENDPOINT")
+    
+    token = login_user(CLUB_USER)
+    if not token:
+        log_test("IAP Restore - Login", "FAIL", "Could not login as club user")
+        return False
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        response = requests.post(
+            f"{BASE_URL}/subscription/iap/restore",
+            headers=headers
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if "success" in data and "message" in data:
+                log_test("IAP Restore", "PASS", f"Response: {data.get('message')}")
+                log_test("IAP Restore Details", "INFO", f"Success: {data.get('success')}, Status: {data.get('subscription_status')}")
+                return True
+            else:
+                log_test("IAP Restore", "FAIL", f"Invalid response structure: {data}")
+                return False
+        else:
+            log_test("IAP Restore", "FAIL", f"Status: {response.status_code}, Response: {response.text}")
+            return False
+            
+    except Exception as e:
+        log_test("IAP Restore", "FAIL", f"Exception: {str(e)}")
+        return False
+
+def test_duplicate_transaction_prevention():
+    """Test duplicate transaction prevention"""
+    print("\n🎯 TESTING DUPLICATE TRANSACTION PREVENTION")
+    
+    token = login_user(CLUB_USER)
+    if not token:
+        return False
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    
+    # Use the same transaction ID twice
+    transaction_id = f"test_duplicate_{uuid.uuid4().hex[:8]}"
+    
+    duplicate_request = {
+        "platform": "ios",
+        "product_id": "com.matchsport24.subscription.monthly",
+        "transaction_id": transaction_id,
+        "receipt": "test_receipt_duplicate",
+        "plan_id": "monthly"
+    }
+    
+    try:
+        # First request - should succeed
+        response1 = requests.post(
+            f"{BASE_URL}/subscription/iap/validate",
+            json=duplicate_request,
+            headers=headers
+        )
+        
+        # Second request with same transaction_id - should detect duplicate
+        response2 = requests.post(
+            f"{BASE_URL}/subscription/iap/validate",
+            json=duplicate_request,
+            headers=headers
+        )
+        
+        if response1.status_code == 200 and response2.status_code == 200:
+            data2 = response2.json()
+            if data2.get("already_processed"):
+                log_test("Duplicate Transaction Prevention", "PASS", f"Duplicate detected: {data2.get('message')}")
+                return True
+            else:
+                log_test("Duplicate Transaction Prevention", "FAIL", "Duplicate not detected")
+                return False
+        else:
+            log_test("Duplicate Transaction Prevention", "FAIL", f"Request failed: {response1.status_code}, {response2.status_code}")
+            return False
+            
+    except Exception as e:
+        log_test("Duplicate Transaction Prevention", "FAIL", f"Exception: {str(e)}")
         return False
 
 def main():
-    """Main testing function"""
-    print(f"{Colors.BOLD}{'='*60}{Colors.ENDC}")
-    print(f"{Colors.BOLD}MATCH SPORT 24 - IAP SUBSCRIPTION ENDPOINTS TESTING{Colors.ENDC}")
-    print(f"{Colors.BOLD}{'='*60}{Colors.ENDC}")
-    print(f"Base URL: {BASE_URL}")
-    print(f"Test Credentials: {CLUB_ADMIN_EMAIL}")
-    print()
+    """Run all IAP subscription tests"""
+    print("=" * 80)
+    print("🚀 IAP SUBSCRIPTION BACKEND TESTING STARTED")
+    print("=" * 80)
     
-    # Step 1: Login as club admin
-    token = test_club_admin_login()
-    if not token:
-        print(f"{Colors.RED}CRITICAL: Cannot proceed without authentication token{Colors.ENDC}")
-        sys.exit(1)
-    
-    # Step 2: Test all IAP endpoints
     test_results = []
     
-    test_results.append(test_iap_validate_endpoint(token))
-    test_results.append(test_iap_status_endpoint(token))
-    test_results.append(test_iap_restore_endpoint(token))
-    test_results.append(test_duplicate_transaction_prevention(token))
+    # Test 1: IAP Validate Endpoint (iOS)
+    result1, transaction_id = test_iap_validate_endpoint()
+    test_results.append(("IAP Validate iOS", result1))
+    
+    # Test 2: IAP Validate Endpoint (Android)
+    result2 = test_iap_validate_android()
+    test_results.append(("IAP Validate Android", result2))
+    
+    # Test 3: IAP Status Endpoint
+    result3 = test_iap_status_endpoint()
+    test_results.append(("IAP Status", result3))
+    
+    # Test 4: IAP Restore Endpoint
+    result4 = test_iap_restore_endpoint()
+    test_results.append(("IAP Restore", result4))
+    
+    # Test 5: Duplicate Transaction Prevention
+    result5 = test_duplicate_transaction_prevention()
+    test_results.append(("Duplicate Prevention", result5))
     
     # Summary
-    print(f"{Colors.BOLD}{'='*60}{Colors.ENDC}")
-    print(f"{Colors.BOLD}TESTING SUMMARY{Colors.ENDC}")
-    print(f"{Colors.BOLD}{'='*60}{Colors.ENDC}")
+    print("\n" + "=" * 80)
+    print("📊 TEST SUMMARY")
+    print("=" * 80)
     
-    passed = sum(test_results)
+    passed = sum(1 for _, result in test_results if result)
     total = len(test_results)
     
-    print(f"Tests Passed: {Colors.GREEN}{passed}{Colors.ENDC}/{total}")
-    print(f"Success Rate: {Colors.GREEN if passed == total else Colors.YELLOW}{(passed/total)*100:.1f}%{Colors.ENDC}")
+    for test_name, result in test_results:
+        status = "✅ PASS" if result else "❌ FAIL"
+        print(f"{status} {test_name}")
+    
+    print(f"\n🏆 OVERALL RESULT: {passed}/{total} tests passed ({(passed/total)*100:.1f}%)")
     
     if passed == total:
-        print(f"\n{Colors.GREEN}🎉 ALL IAP SUBSCRIPTION ENDPOINTS WORKING CORRECTLY!{Colors.ENDC}")
+        print("🎉 ALL IAP SUBSCRIPTION ENDPOINTS ARE FULLY FUNCTIONAL!")
     else:
-        print(f"\n{Colors.RED}❌ SOME TESTS FAILED - REVIEW REQUIRED{Colors.ENDC}")
+        print("⚠️  Some tests failed. Please review the issues above.")
     
     return passed == total
 
 if __name__ == "__main__":
-    success = main()
-    sys.exit(0 if success else 1)
+    main()

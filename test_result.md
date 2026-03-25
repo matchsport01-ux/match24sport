@@ -647,6 +647,28 @@ agent_communication:
       Complete IAP workflow verified: validate → status → restore → duplicate prevention.
   - agent: "testing"
     message: |
+      COMPREHENSIVE IAP SUBSCRIPTION RE-TESTING COMPLETED - 100% SUCCESS RATE (5/5 TESTS PASSED)
+      
+      🎯 REVIEW REQUEST VERIFICATION:
+      ✅ TEST 1: IAP Validate iOS - POST /api/subscription/iap/validate with platform='ios', product_id='com.matchsport24.subscription.monthly', plan_id='monthly' returns 200 with success=true, subscription_status='active', expires_at='2026-04-24'
+      ✅ TEST 2: IAP Validate Android - Same endpoint with platform='android' returns 200 with proper activation
+      ✅ TEST 3: IAP Status - GET /api/subscription/iap/status returns 200 with all required fields: subscription_status, subscription_plan, subscription_expires_at, subscription_source, is_active
+      ✅ TEST 4: IAP Restore - POST /api/subscription/iap/restore returns 200 with Italian message 'Abbonamento ripristinato con successo!'
+      ✅ TEST 5: Duplicate Prevention - Same transaction_id correctly detected with already_processed=true
+      ✅ BONUS: Apple Demo Access Control - reviewer@apple.com correctly rejected with 400 Bad Request (only club accounts allowed)
+      
+      🔧 BACKEND LOGS VERIFICATION:
+      - All IAP operations properly logged: '[IAP] Validating purchase', '[IAP] Subscription activated', '[IAP] Duplicate transaction'
+      - Subscription activation logged with proper expiration dates
+      - Italian localization working correctly throughout
+      - Security controls working: only club accounts can access IAP endpoints
+      
+      🏆 ALL IAP SUBSCRIPTION ENDPOINTS FULLY FUNCTIONAL AND PRODUCTION-READY:
+      Base URL: https://padel-finder-app.preview.emergentagent.com/api
+      Test Credentials: newclubtest6051@test.com / TestPass123! (club), reviewer@apple.com / AppleReview2024! (player)
+      All endpoints returning proper HTTP status codes with valid JSON responses and proper error handling.
+  - agent: "testing"
+    message: |
       DELETE ACCOUNT ENDPOINT REFACTORING VERIFICATION COMPLETED - 100% SUCCESS RATE (6/6 TESTS PASSED)
       
       🎯 REVIEW REQUEST TESTING RESULTS:
@@ -1318,5 +1340,8 @@ agent_communication:
       - working: true
         agent: "testing"
         comment: "IAP SUBSCRIPTION ENDPOINTS TESTING COMPLETED - 100% SUCCESS RATE (4/4 tests passed). ✅ Club admin login with newclubtest6051@test.com working correctly. ✅ POST /api/subscription/iap/validate with iOS platform, product_id 'com.matchsport24.subscription.monthly', transaction_id 'test_transaction_12345' returns 200 with success:true and subscription activated. ✅ GET /api/subscription/iap/status returns 200 with all required fields: subscription_status='active', subscription_plan='monthly', is_active=true. ✅ POST /api/subscription/iap/restore returns 200 with valid response structure and subscription info. ✅ Duplicate transaction prevention working correctly - same transaction_id returns already_processed:true without duplicate activation. All IAP endpoints working correctly with proper authentication, validation, and Italian localization. Complete workflow verified: validate purchase → check status → restore purchases → prevent duplicates."
+      - working: true
+        agent: "testing"
+        comment: "COMPREHENSIVE IAP SUBSCRIPTION RE-TESTING COMPLETED - 100% SUCCESS RATE (5/5 tests passed). ✅ TEST 1: IAP Validate iOS - POST /api/subscription/iap/validate with platform='ios', product_id='com.matchsport24.subscription.monthly', plan_id='monthly' returns 200 with success=true, subscription_status='active', expires_at='2026-04-24'. ✅ TEST 2: IAP Validate Android - Same endpoint with platform='android' returns 200 with proper activation. ✅ TEST 3: IAP Status - GET /api/subscription/iap/status returns 200 with all required fields: subscription_status, subscription_plan, subscription_expires_at, subscription_source, is_active. ✅ TEST 4: IAP Restore - POST /api/subscription/iap/restore returns 200 with Italian message 'Abbonamento ripristinato con successo!'. ✅ TEST 5: Duplicate Prevention - Same transaction_id correctly detected with already_processed=true. ✅ BONUS: Apple Demo Access Control - reviewer@apple.com correctly rejected with 400 Bad Request (only club accounts allowed). Backend logs show proper IAP operations: '[IAP] Validating purchase', '[IAP] Subscription activated', '[IAP] Duplicate transaction'. All endpoints working with proper authentication, validation, Italian localization, and security controls."
 
 agent_communication:

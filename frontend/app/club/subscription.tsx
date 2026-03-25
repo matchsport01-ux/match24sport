@@ -1,4 +1,4 @@
-// Club Subscription Screen
+// Club Subscription Screen - Uses native IAP correctly via useSubscription hook
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -19,7 +19,7 @@ import { useLanguage } from '../../src/contexts/LanguageContext';
 import { COLORS } from '../../src/utils/constants';
 import { apiClient } from '../../src/api/client';
 import { format, parseISO } from 'date-fns';
-import { iapService, shouldUseNativeIAP, PLAN_TO_PRODUCT_ID } from '../../src/services/iapService';
+import { useSubscription, shouldUseNativeIAP, PRODUCT_IDS } from '../../src/hooks/useSubscription';
 import { successHaptic, errorHaptic } from '../../src/utils/haptics';
 
 export default function ClubSubscriptionScreen() {
@@ -38,39 +38,50 @@ export default function ClubSubscriptionScreen() {
   const [promoValue, setPromoValue] = useState(0);
   const [promoMessage, setPromoMessage] = useState('');
   const [isValidatingPromo, setIsValidatingPromo] = useState(false);
-  const [iapInitialized, setIapInitialized] = useState(false);
-  const [isRestoring, setIsRestoring] = useState(false);
+
+  // Use the new subscription hook for native IAP
+  const {
+    isConnected: iapConnected,
+    isLoading: iapLoading,
+    isPurchasing,
+    isRestoring,
+    products: iapProducts,
+    error: iapError,
+    purchaseSubscription,
+    restorePurchases,
+  } = useSubscription();
+
+  // Show only monthly plan for now (yearly not configured in App Store Connect yet)
+  // This can be changed when the yearly product is set up
+  const showYearlyPlan = false; // Set to true when yearly is configured
 
   const plans = {
-    monthly: { name: t('monthly'), price: 49.99, period: t('per_month') },
-    yearly: { name: t('yearly'), price: 399.99, period: t('per_year'), savings: '33%' },
+    monthly: { 
+      name: t('monthly'), 
+      price: 49.99, 
+      period: t('per_month'),
+      productId: PRODUCT_IDS.MONTHLY,
+    },
+    ...(showYearlyPlan ? {
+      yearly: { 
+        name: t('yearly'), 
+        price: 399.99, 
+        period: t('per_year'), 
+        savings: '33%',
+        productId: PRODUCT_IDS.YEARLY,
+      },
+    } : {}),
   };
 
-  // Initialize IAP on mount if on mobile
-  useEffect(() => {
-    const initIAP = async () => {
-      if (shouldUseNativeIAP()) {
-        try {
-          const initialized = await iapService.initialize();
-          setIapInitialized(initialized);
-          if (initialized) {
-            // Fetch products from store
-            await iapService.getProducts();
-          }
-        } catch (error) {
-          console.log('[Subscription] IAP init error:', error);
-        }
-      }
-    };
-    
-    initIAP();
-    
-    return () => {
-      if (shouldUseNativeIAP()) {
-        iapService.disconnect();
-      }
-    };
-  }, []);
+  // Update prices from store products if available
+  const getStorePrice = (productId: string): string | null => {
+    if (!iapProducts || iapProducts.length === 0) return null;
+    const product = iapProducts.find((p: any) => p.id === productId || p.productId === productId);
+    if (product) {
+      return (product as any).displayPrice || (product as any).localizedPrice || (product as any).price;
+    }
+    return null;
+  };
 
   const validatePromoCode = async () => {
     if (!promoCode.trim()) {
@@ -136,7 +147,6 @@ export default function ClubSubscriptionScreen() {
           Alert.alert(t('success'), 'Abbonamento attivato con successo!');
           await fetchClub();
           setIsProcessing(false);
-          // Clear URL params
           if (Platform.OS === 'web') {
             window.history.replaceState(null, '', window.location.pathname);
           }
@@ -171,21 +181,21 @@ export default function ClubSubscriptionScreen() {
     }
   }, [session_id]);
 
-  // Handle IAP purchase for mobile
+  // Handle IAP purchase for mobile using the hook
   const handleIAPPurchase = async () => {
-    const productId = PLAN_TO_PRODUCT_ID[selectedPlan];
-    if (!productId) {
+    const plan = plans[selectedPlan];
+    if (!plan?.productId) {
       Alert.alert('Errore', 'Piano non disponibile');
       return;
     }
 
     setIsProcessing(true);
     try {
-      console.log('[Subscription] Starting IAP purchase for:', selectedPlan, productId);
+      console.log('[Subscription] Starting native IAP purchase for:', selectedPlan, plan.productId);
       
-      const result = await iapService.purchaseByPlan(selectedPlan);
+      const result = await purchaseSubscription(plan.productId);
       
-      if (result.cancelled) {
+      if (result.error === 'cancelled') {
         // User cancelled - no error message needed
         setIsProcessing(false);
         return;
@@ -198,24 +208,10 @@ export default function ClubSubscriptionScreen() {
         return;
       }
 
-      // Validate with backend
-      console.log('[Subscription] Validating purchase with backend...');
-      const validation = await apiClient.validateIAPPurchase({
-        platform: Platform.OS as 'ios' | 'android',
-        product_id: productId,
-        transaction_id: result.transactionId!,
-        receipt: result.receipt || '',
-        plan_id: selectedPlan,
-      });
-
-      if (validation.success) {
-        successHaptic();
-        Alert.alert('Successo!', 'Abbonamento attivato con successo!');
-        await fetchClub();
-      } else {
-        errorHaptic();
-        Alert.alert('Errore', validation.message || 'Impossibile attivare l\'abbonamento');
-      }
+      // Purchase successful - backend validation already done in hook
+      successHaptic();
+      Alert.alert('Successo!', 'Abbonamento attivato con successo!');
+      await fetchClub();
     } catch (error: any) {
       console.error('[Subscription] IAP error:', error);
       errorHaptic();
@@ -249,48 +245,21 @@ export default function ClubSubscriptionScreen() {
     }
   };
 
-  // Restore purchases
+  // Handle restore purchases
   const handleRestorePurchases = async () => {
-    setIsRestoring(true);
     try {
-      // First try local restore via IAP
-      if (shouldUseNativeIAP() && iapInitialized) {
-        const restoreResults = await iapService.restorePurchases();
-        
-        // If found purchases, validate with backend
-        const validPurchase = restoreResults.find(r => r.success && r.receipt);
-        if (validPurchase) {
-          const validation = await apiClient.validateIAPPurchase({
-            platform: Platform.OS as 'ios' | 'android',
-            product_id: validPurchase.productId!,
-            transaction_id: validPurchase.transactionId!,
-            receipt: validPurchase.receipt || '',
-            plan_id: validPurchase.productId?.includes('yearly') ? 'yearly' : 'monthly',
-          });
-          
-          if (validation.success) {
-            successHaptic();
-            Alert.alert('Successo!', 'Abbonamento ripristinato con successo!');
-            await fetchClub();
-            return;
-          }
-        }
-      }
-
-      // Also try backend restore
-      const backendRestore = await apiClient.restoreIAPPurchases();
-      if (backendRestore.success) {
+      const result = await restorePurchases();
+      
+      if (result.success) {
         successHaptic();
-        Alert.alert('Successo!', backendRestore.message);
+        Alert.alert('Successo!', result.message || 'Abbonamento ripristinato!');
         await fetchClub();
       } else {
-        Alert.alert('Info', backendRestore.message || 'Nessun abbonamento da ripristinare');
+        Alert.alert('Info', result.message || 'Nessun abbonamento da ripristinare');
       }
     } catch (error: any) {
       console.error('[Subscription] Restore error:', error);
       Alert.alert('Errore', 'Impossibile ripristinare gli acquisti');
-    } finally {
-      setIsRestoring(false);
     }
   };
 
@@ -339,12 +308,51 @@ export default function ClubSubscriptionScreen() {
     }
   };
 
-  // Get payment method label
   const getPaymentMethodLabel = () => {
     if (shouldUseNativeIAP()) {
       return Platform.OS === 'ios' ? 'App Store' : 'Google Play';
     }
     return 'Stripe';
+  };
+
+  // Show IAP connection status for debugging (only on mobile)
+  const renderIAPStatus = () => {
+    if (!shouldUseNativeIAP()) return null;
+    
+    if (iapLoading) {
+      return (
+        <View style={styles.iapStatusBanner}>
+          <Ionicons name="hourglass-outline" size={16} color={COLORS.warning} />
+          <Text style={[styles.iapStatusText, { color: COLORS.warning }]}>
+            Connessione allo store...
+          </Text>
+        </View>
+      );
+    }
+    
+    if (!iapConnected) {
+      return (
+        <View style={styles.iapStatusBanner}>
+          <Ionicons name="warning-outline" size={16} color={COLORS.error} />
+          <Text style={[styles.iapStatusText, { color: COLORS.error }]}>
+            Store non connesso
+          </Text>
+        </View>
+      );
+    }
+
+    if (iapProducts.length === 0) {
+      return (
+        <View style={styles.iapStatusBanner}>
+          <Ionicons name="information-circle-outline" size={16} color={COLORS.warning} />
+          <Text style={[styles.iapStatusText, { color: COLORS.warning }]}>
+            Caricamento prodotti...
+          </Text>
+        </View>
+      );
+    }
+    
+    return null;
   };
 
   if (isLoading) {
@@ -362,6 +370,9 @@ export default function ClubSubscriptionScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* IAP Status Banner */}
+        {renderIAPStatus()}
+
         {/* Current Status */}
         {club && (
           <Card style={styles.statusCard}>
@@ -395,48 +406,52 @@ export default function ClubSubscriptionScreen() {
         {/* Plans */}
         <Text style={styles.sectionTitle}>{t('pricing')}</Text>
 
-        {Object.entries(plans).map(([planId, plan]) => (
-          <TouchableOpacity
-            key={planId}
-            onPress={() => setSelectedPlan(planId as 'monthly' | 'yearly')}
-          >
-            <Card
-              style={[
-                styles.planCard,
-                selectedPlan === planId && styles.planCardSelected,
-              ]}
+        {Object.entries(plans).map(([planId, plan]) => {
+          const storePrice = getStorePrice(plan.productId);
+          
+          return (
+            <TouchableOpacity
+              key={planId}
+              onPress={() => setSelectedPlan(planId as 'monthly' | 'yearly')}
             >
-              {plan.savings && (
-                <View style={styles.savingsBadge}>
-                  <Text style={styles.savingsText}>Risparmia {plan.savings}</Text>
+              <Card
+                style={[
+                  styles.planCard,
+                  selectedPlan === planId && styles.planCardSelected,
+                ]}
+              >
+                {'savings' in plan && plan.savings && (
+                  <View style={styles.savingsBadge}>
+                    <Text style={styles.savingsText}>Risparmia {plan.savings}</Text>
+                  </View>
+                )}
+                <View style={styles.planHeader}>
+                  <View style={[
+                    styles.radioOuter,
+                    selectedPlan === planId && styles.radioOuterSelected,
+                  ]}>
+                    {selectedPlan === planId && <View style={styles.radioInner} />}
+                  </View>
+                  <View style={styles.planInfo}>
+                    <Text style={styles.planName}>{plan.name}</Text>
+                    <Text style={styles.planDescription}>
+                      Accesso completo alla piattaforma
+                    </Text>
+                  </View>
+                  <View style={styles.planPrice}>
+                    {promoApplied && promoDiscount > 0 && (
+                      <Text style={styles.originalPrice}>€{plan.price.toFixed(2)}</Text>
+                    )}
+                    <Text style={styles.priceValue}>
+                      {storePrice || `€${getDiscountedPrice(plan.price).toFixed(2)}`}
+                    </Text>
+                    <Text style={styles.pricePeriod}>{plan.period}</Text>
+                  </View>
                 </View>
-              )}
-              <View style={styles.planHeader}>
-                <View style={[
-                  styles.radioOuter,
-                  selectedPlan === planId && styles.radioOuterSelected,
-                ]}>
-                  {selectedPlan === planId && <View style={styles.radioInner} />}
-                </View>
-                <View style={styles.planInfo}>
-                  <Text style={styles.planName}>{plan.name}</Text>
-                  <Text style={styles.planDescription}>
-                    Accesso completo alla piattaforma
-                  </Text>
-                </View>
-                <View style={styles.planPrice}>
-                  {promoApplied && promoDiscount > 0 && (
-                    <Text style={styles.originalPrice}>€{plan.price.toFixed(2)}</Text>
-                  )}
-                  <Text style={styles.priceValue}>
-                    €{getDiscountedPrice(plan.price).toFixed(2)}
-                  </Text>
-                  <Text style={styles.pricePeriod}>{plan.period}</Text>
-                </View>
-              </View>
-            </Card>
-          </TouchableOpacity>
-        ))}
+              </Card>
+            </TouchableOpacity>
+          );
+        })}
 
         {/* Promo Code Section - Only show if not using IAP */}
         {!shouldUseNativeIAP() && (
@@ -511,7 +526,8 @@ export default function ClubSubscriptionScreen() {
               : (club?.subscription_status === 'active' ? 'Cambia piano' : t('subscribe'))
           }
           onPress={handleSubscribe}
-          loading={isProcessing}
+          loading={isProcessing || isPurchasing}
+          disabled={shouldUseNativeIAP() && (!iapConnected || iapProducts.length === 0)}
           fullWidth
           size="large"
           style={styles.subscribeButton}
@@ -569,6 +585,21 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingBottom: 24,
+  },
+  iapStatusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  iapStatusText: {
+    fontSize: 13,
+    marginLeft: 6,
+    fontWeight: '500',
   },
   statusCard: {
     marginBottom: 24,
@@ -749,12 +780,6 @@ const styles = StyleSheet.create({
   },
   removePromoButton: {
     padding: 4,
-  },
-  promoHint: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    marginTop: 8,
-    fontStyle: 'italic',
   },
   featuresCard: {
     marginTop: 12,
