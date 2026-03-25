@@ -1,4 +1,4 @@
-// Club Subscription Screen - Uses native IAP correctly via useSubscription hook
+// Club Subscription Screen - Uses native IAP with comprehensive state management
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -19,7 +19,7 @@ import { useLanguage } from '../../src/contexts/LanguageContext';
 import { COLORS } from '../../src/utils/constants';
 import { apiClient } from '../../src/api/client';
 import { format, parseISO } from 'date-fns';
-import { useSubscription, shouldUseNativeIAP, PRODUCT_IDS } from '../../src/hooks/useSubscription';
+import { useSubscription, shouldUseNativeIAP, PRODUCT_IDS, ACTIVE_SUBSCRIPTION_SKUS } from '../../src/hooks/useSubscription';
 import { successHaptic, errorHaptic } from '../../src/utils/haptics';
 
 export default function ClubSubscriptionScreen() {
@@ -36,44 +36,50 @@ export default function ClubSubscriptionScreen() {
   const [promoDiscount, setPromoDiscount] = useState(0);
   const [promoType, setPromoType] = useState<'percentage' | 'trial_months' | null>(null);
   const [promoValue, setPromoValue] = useState(0);
-  const [promoMessage, setPromoMessage] = useState('');
   const [isValidatingPromo, setIsValidatingPromo] = useState(false);
+  
+  // Debug mode - show detailed IAP status
+  const [showDebug, setShowDebug] = useState(__DEV__ || true); // Always show for now
 
-  // Use the new subscription hook for native IAP
+  // Use the subscription hook
   const {
+    state: iapState,
     isConnected: iapConnected,
     isLoading: iapLoading,
     isPurchasing,
     isRestoring,
+    isReady: iapReady,
     products: iapProducts,
     error: iapError,
+    debugInfo,
     purchaseSubscription,
     restorePurchases,
+    refreshProducts,
+    retryConnection,
   } = useSubscription();
 
-  // Show only monthly plan for now (yearly not configured in App Store Connect yet)
-  // This can be changed when the yearly product is set up
-  const showYearlyPlan = false; // Set to true when yearly is configured
+  // Show only monthly plan for now
+  const showYearlyPlan = false;
 
   const plans = {
-    monthly: { 
-      name: t('monthly'), 
-      price: 49.99, 
+    monthly: {
+      name: t('monthly'),
+      price: 49.99,
       period: t('per_month'),
       productId: PRODUCT_IDS.MONTHLY,
     },
     ...(showYearlyPlan ? {
-      yearly: { 
-        name: t('yearly'), 
-        price: 399.99, 
-        period: t('per_year'), 
+      yearly: {
+        name: t('yearly'),
+        price: 399.99,
+        period: t('per_year'),
         savings: '33%',
         productId: PRODUCT_IDS.YEARLY,
       },
     } : {}),
   };
 
-  // Update prices from store products if available
+  // Get price from store products
   const getStorePrice = (productId: string): string | null => {
     if (!iapProducts || iapProducts.length === 0) return null;
     const product = iapProducts.find((p: any) => p.id === productId || p.productId === productId);
@@ -88,7 +94,7 @@ export default function ClubSubscriptionScreen() {
       Alert.alert('Errore', 'Inserisci un codice promozionale');
       return;
     }
-    
+
     setIsValidatingPromo(true);
     try {
       const response = await apiClient.validatePromoCode(promoCode.trim().toUpperCase());
@@ -97,7 +103,6 @@ export default function ClubSubscriptionScreen() {
         setPromoDiscount(response.discount || 0);
         setPromoType(response.type || 'percentage');
         setPromoValue(response.value || 0);
-        setPromoMessage(response.message || '');
         Alert.alert('Successo', response.message);
       } else {
         Alert.alert('Errore', response.message || 'Codice non valido');
@@ -115,7 +120,6 @@ export default function ClubSubscriptionScreen() {
     setPromoDiscount(0);
     setPromoType(null);
     setPromoValue(0);
-    setPromoMessage('');
   };
 
   const getDiscountedPrice = (originalPrice: number) => {
@@ -181,7 +185,7 @@ export default function ClubSubscriptionScreen() {
     }
   }, [session_id]);
 
-  // Handle IAP purchase for mobile using the hook
+  // Handle IAP purchase
   const handleIAPPurchase = async () => {
     const plan = plans[selectedPlan];
     if (!plan?.productId) {
@@ -192,15 +196,14 @@ export default function ClubSubscriptionScreen() {
     setIsProcessing(true);
     try {
       console.log('[Subscription] Starting native IAP purchase for:', selectedPlan, plan.productId);
-      
+
       const result = await purchaseSubscription(plan.productId);
-      
+
       if (result.error === 'cancelled') {
-        // User cancelled - no error message needed
         setIsProcessing(false);
         return;
       }
-      
+
       if (!result.success) {
         errorHaptic();
         Alert.alert('Errore', result.error || 'Acquisto non completato');
@@ -208,7 +211,6 @@ export default function ClubSubscriptionScreen() {
         return;
       }
 
-      // Purchase successful - backend validation already done in hook
       successHaptic();
       Alert.alert('Successo!', 'Abbonamento attivato con successo!');
       await fetchClub();
@@ -225,12 +227,12 @@ export default function ClubSubscriptionScreen() {
   const handleStripeCheckout = async () => {
     setIsProcessing(true);
     try {
-      const originUrl = Platform.OS === 'web' 
-        ? window.location.origin 
+      const originUrl = Platform.OS === 'web'
+        ? window.location.origin
         : 'https://padel-finder-app.preview.emergentagent.com';
-      
+
       const result = await apiClient.createSubscriptionCheckout(selectedPlan, originUrl);
-      
+
       if (result.url) {
         if (Platform.OS === 'web') {
           window.location.href = result.url;
@@ -249,7 +251,7 @@ export default function ClubSubscriptionScreen() {
   const handleRestorePurchases = async () => {
     try {
       const result = await restorePurchases();
-      
+
       if (result.success) {
         successHaptic();
         Alert.alert('Successo!', result.message || 'Abbonamento ripristinato!');
@@ -264,7 +266,6 @@ export default function ClubSubscriptionScreen() {
   };
 
   const handleSubscribe = async () => {
-    // If a trial promo is applied, activate it directly
     if (promoApplied && promoType === 'trial_months') {
       setIsProcessing(true);
       try {
@@ -282,7 +283,6 @@ export default function ClubSubscriptionScreen() {
       return;
     }
 
-    // Use native IAP on mobile, Stripe on web
     if (shouldUseNativeIAP()) {
       await handleIAPPurchase();
     } else {
@@ -315,49 +315,115 @@ export default function ClubSubscriptionScreen() {
     return 'Stripe';
   };
 
-  // Show IAP connection status for debugging (only on mobile)
+  // Get state-specific icon and color
+  const getStateIcon = (): { name: keyof typeof Ionicons.glyphMap; color: string } => {
+    switch (iapState) {
+      case 'initializing':
+      case 'connecting':
+        return { name: 'hourglass-outline', color: COLORS.warning };
+      case 'connected':
+      case 'fetching':
+        return { name: 'cloud-download-outline', color: COLORS.warning };
+      case 'ready':
+        return { name: 'checkmark-circle', color: COLORS.success };
+      case 'purchasing':
+      case 'restoring':
+        return { name: 'sync-outline', color: COLORS.accent };
+      case 'error':
+        return { name: 'alert-circle', color: COLORS.error };
+      case 'unavailable':
+        return { name: 'close-circle', color: COLORS.textMuted };
+      default:
+        return { name: 'help-circle', color: COLORS.textMuted };
+    }
+  };
+
+  // Render IAP status banner with detailed info
   const renderIAPStatus = () => {
     if (!shouldUseNativeIAP()) return null;
-    
-    if (iapLoading) {
-      return (
-        <View style={styles.iapStatusBanner}>
-          <Ionicons name="hourglass-outline" size={16} color={COLORS.warning} />
-          <Text style={[styles.iapStatusText, { color: COLORS.warning }]}>
-            Connessione allo store...
-          </Text>
-        </View>
-      );
-    }
-    
-    if (!iapConnected) {
-      return (
-        <View style={styles.iapStatusBanner}>
-          <Ionicons name="warning-outline" size={16} color={COLORS.error} />
-          <Text style={[styles.iapStatusText, { color: COLORS.error }]}>
-            Store non connesso
-          </Text>
-        </View>
-      );
-    }
 
-    if (iapProducts.length === 0) {
-      return (
-        <View style={styles.iapStatusBanner}>
-          <Ionicons name="information-circle-outline" size={16} color={COLORS.warning} />
-          <Text style={[styles.iapStatusText, { color: COLORS.warning }]}>
-            Caricamento prodotti...
+    const stateIcon = getStateIcon();
+    const showRetry = iapState === 'error';
+    const showRefresh = iapState === 'ready' && iapProducts.length === 0;
+
+    return (
+      <TouchableOpacity
+        style={[
+          styles.iapStatusBanner,
+          iapState === 'error' && styles.iapStatusBannerError,
+          iapState === 'ready' && iapProducts.length > 0 && styles.iapStatusBannerSuccess,
+        ]}
+        onPress={() => setShowDebug(!showDebug)}
+        onLongPress={showRetry ? retryConnection : (showRefresh ? refreshProducts : undefined)}
+      >
+        <Ionicons name={stateIcon.name} size={18} color={stateIcon.color} />
+        <View style={styles.iapStatusTextContainer}>
+          <Text style={[styles.iapStatusText, { color: stateIcon.color }]}>
+            {debugInfo}
           </Text>
+          {showDebug && (
+            <Text style={styles.iapDebugText}>
+              Stato: {iapState} | Connesso: {iapConnected ? 'Sì' : 'No'} | Prodotti: {iapProducts.length}
+            </Text>
+          )}
+          {iapError && showDebug && (
+            <Text style={styles.iapErrorText}>
+              Errore [{iapError.code}]: {iapError.message}
+            </Text>
+          )}
         </View>
-      );
-    }
-    
-    return null;
+        {(showRetry || showRefresh) && (
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={showRetry ? retryConnection : refreshProducts}
+          >
+            <Ionicons name="refresh" size={20} color={COLORS.accent} />
+          </TouchableOpacity>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  // Render product debug info
+  const renderProductDebug = () => {
+    if (!showDebug || !shouldUseNativeIAP()) return null;
+
+    return (
+      <Card style={styles.debugCard}>
+        <Text style={styles.debugTitle}>Debug IAP</Text>
+        <Text style={styles.debugText}>Platform: {Platform.OS}</Text>
+        <Text style={styles.debugText}>SKUs richiesti: {ACTIVE_SUBSCRIPTION_SKUS.join(', ')}</Text>
+        <Text style={styles.debugText}>Prodotti caricati: {iapProducts.length}</Text>
+        {iapProducts.map((p: any, i: number) => (
+          <Text key={i} style={styles.debugText}>
+            → {p.id}: {p.displayPrice || p.price || 'N/A'}
+          </Text>
+        ))}
+        {iapError && (
+          <>
+            <Text style={[styles.debugText, { color: COLORS.error }]}>
+              Errore: {iapError.code}
+            </Text>
+            <Text style={[styles.debugText, { color: COLORS.error }]}>
+              {iapError.message}
+            </Text>
+            <Text style={[styles.debugText, { color: COLORS.textMuted }]}>
+              Step: {iapError.step}
+            </Text>
+          </>
+        )}
+      </Card>
+    );
   };
 
   if (isLoading) {
     return <LoadingSpinner fullScreen message={t('loading')} />;
   }
+
+  // Determine if subscribe button should be enabled
+  const canSubscribe = shouldUseNativeIAP()
+    ? (iapReady && iapProducts.length > 0 && !isPurchasing && !isProcessing)
+    : !isProcessing;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -366,12 +432,17 @@ export default function ClubSubscriptionScreen() {
           <Ionicons name="arrow-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('subscription')}</Text>
-        <View style={{ width: 44 }} />
+        <TouchableOpacity onPress={() => setShowDebug(!showDebug)}>
+          <Ionicons name="bug-outline" size={24} color={showDebug ? COLORS.accent : COLORS.textMuted} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* IAP Status Banner */}
         {renderIAPStatus()}
+
+        {/* Product Debug Info */}
+        {renderProductDebug()}
 
         {/* Current Status */}
         {club && (
@@ -408,7 +479,7 @@ export default function ClubSubscriptionScreen() {
 
         {Object.entries(plans).map(([planId, plan]) => {
           const storePrice = getStorePrice(plan.productId);
-          
+
           return (
             <TouchableOpacity
               key={planId}
@@ -446,6 +517,9 @@ export default function ClubSubscriptionScreen() {
                       {storePrice || `€${getDiscountedPrice(plan.price).toFixed(2)}`}
                     </Text>
                     <Text style={styles.pricePeriod}>{plan.period}</Text>
+                    {!storePrice && shouldUseNativeIAP() && (
+                      <Text style={styles.priceNote}>(prezzo indicativo)</Text>
+                    )}
                   </View>
                 </View>
               </Card>
@@ -465,8 +539,8 @@ export default function ClubSubscriptionScreen() {
                 <View style={styles.promoAppliedBadge}>
                   <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
                   <Text style={styles.promoAppliedText}>
-                    {promoType === 'trial_months' 
-                      ? `${promoValue} mesi di prova gratuita` 
+                    {promoType === 'trial_months'
+                      ? `${promoValue} mesi di prova gratuita`
                       : `Sconto ${promoDiscount}% applicato`}
                   </Text>
                 </View>
@@ -521,24 +595,33 @@ export default function ClubSubscriptionScreen() {
         {/* Subscribe Button */}
         <Button
           title={
-            promoApplied && promoType === 'trial_months' 
-              ? `Attiva prova ${promoValue} mesi` 
+            promoApplied && promoType === 'trial_months'
+              ? `Attiva prova ${promoValue} mesi`
               : (club?.subscription_status === 'active' ? 'Cambia piano' : t('subscribe'))
           }
           onPress={handleSubscribe}
           loading={isProcessing || isPurchasing}
-          disabled={shouldUseNativeIAP() && (!iapConnected || iapProducts.length === 0)}
+          disabled={!canSubscribe}
           fullWidth
           size="large"
           style={styles.subscribeButton}
         />
 
+        {/* Disabled reason */}
+        {shouldUseNativeIAP() && !canSubscribe && !isPurchasing && !isProcessing && (
+          <Text style={styles.disabledReason}>
+            {!iapConnected && 'Store non connesso. '}
+            {iapConnected && iapProducts.length === 0 && 'Prodotti non caricati. '}
+            {iapError && `Errore: ${iapError.message}`}
+          </Text>
+        )}
+
         {/* Restore Purchases - Only for mobile */}
         {shouldUseNativeIAP() && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.restoreButton}
             onPress={handleRestorePurchases}
-            disabled={isRestoring}
+            disabled={isRestoring || !iapConnected}
           >
             <Text style={styles.restoreButtonText}>
               {isRestoring ? 'Ripristino in corso...' : 'Ripristina acquisti'}
@@ -548,7 +631,7 @@ export default function ClubSubscriptionScreen() {
 
         <Text style={styles.disclaimer}>
           Pagamento sicuro tramite {getPaymentMethodLabel()}.{' '}
-          {shouldUseNativeIAP() 
+          {shouldUseNativeIAP()
             ? 'L\'abbonamento si rinnova automaticamente.'
             : 'Puoi cancellare in qualsiasi momento.'}
         </Text>
@@ -589,17 +672,60 @@ const styles = StyleSheet.create({
   iapStatusBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 12,
     backgroundColor: COLORS.surface,
-    borderRadius: 8,
+    borderRadius: 10,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  iapStatusBannerError: {
+    borderColor: COLORS.error,
+    backgroundColor: COLORS.error + '10',
+  },
+  iapStatusBannerSuccess: {
+    borderColor: COLORS.success,
+    backgroundColor: COLORS.success + '10',
+  },
+  iapStatusTextContainer: {
+    flex: 1,
+    marginLeft: 10,
   },
   iapStatusText: {
-    fontSize: 13,
-    marginLeft: 6,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  iapDebugText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  iapErrorText: {
+    fontSize: 11,
+    color: COLORS.error,
+    marginTop: 2,
+  },
+  retryButton: {
+    padding: 8,
+  },
+  debugCard: {
+    marginBottom: 16,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.accent + '40',
+  },
+  debugTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.accent,
+    marginBottom: 8,
+  },
+  debugText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginBottom: 2,
   },
   statusCard: {
     marginBottom: 24,
@@ -717,6 +843,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textMuted,
   },
+  priceNote: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    fontStyle: 'italic',
+  },
   promoCard: {
     marginBottom: 16,
     backgroundColor: COLORS.surface,
@@ -802,6 +933,12 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   subscribeButton: {
+    marginBottom: 8,
+  },
+  disabledReason: {
+    fontSize: 12,
+    color: COLORS.error,
+    textAlign: 'center',
     marginBottom: 12,
   },
   restoreButton: {

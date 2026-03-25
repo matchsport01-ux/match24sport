@@ -11,14 +11,18 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.matchsport24.app",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "infoPlist": {
         "NSCameraUsageDescription": "Per scattare foto del tuo profilo",
         "NSPhotoLibraryUsageDescription": "Per scegliere foto dalla galleria",
-        "CFBundleAllowMixedLocalizations": true
+        "CFBundleAllowMixedLocalizations": true,
+        "SKAdNetworkItems": []
       },
       "config": {
         "usesNonExemptEncryption": false
+      },
+      "entitlements": {
+        "com.apple.developer.in-app-payments": ["merchant.com.matchsport24.app"]
       }
     },
     "android": {
@@ -57,6 +61,21 @@
         {
           "photosPermission": "Permetti a Match Sport 24 di accedere alle tue foto",
           "cameraPermission": "Permetti a Match Sport 24 di accedere alla fotocamera"
+        }
+      ],
+      "expo-iap",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          },
+          "android": {
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "minSdkVersion": 24,
+            "kotlinVersion": "2.0.0"
+          }
         }
       ]
     ],
