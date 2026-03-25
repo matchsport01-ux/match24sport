@@ -52,8 +52,6 @@ export interface PurchaseResult {
 class InAppPurchaseService {
   private isConnected: boolean = false;
   private products: Map<string, SubscriptionProduct> = new Map();
-  private purchaseUpdateSubscription: any = null;
-  private purchaseErrorSubscription: any = null;
 
   // Check if IAP is available on this platform
   isIAPAvailable(): boolean {
@@ -71,12 +69,6 @@ class InAppPurchaseService {
       const result = await ExpoIAP.initConnection();
       this.isConnected = !!result;
       console.log('[IAP] Connection initialized:', result);
-      
-      // On Android, consume any pending purchases to clear the queue
-      if (Platform.OS === 'android') {
-        await ExpoIAP.flushFailedPurchasesCachedAsPendingAndroid();
-      }
-      
       return this.isConnected;
     } catch (error) {
       console.error('[IAP] Failed to initialize:', error);
@@ -110,11 +102,14 @@ class InAppPurchaseService {
 
     try {
       const productIds = Object.values(PRODUCT_IDS).filter(Boolean) as string[];
-      console.log('[IAP] Fetching products:', productIds);
+      console.log('[IAP] Fetching subscriptions:', productIds);
       
-      // For subscriptions, use getSubscriptions
-      const subscriptions = await ExpoIAP.getSubscriptions({ skus: productIds });
-      console.log('[IAP] Subscriptions fetched:', subscriptions);
+      // Use getSubscriptions for subscription products
+      const response = await ExpoIAP.getSubscriptions({ skus: productIds });
+      console.log('[IAP] Subscriptions response:', response);
+      
+      // Handle the response structure
+      const subscriptions = response.results || response || [];
       
       const products: SubscriptionProduct[] = subscriptions.map((sub: any) => ({
         productId: sub.productId,
@@ -160,34 +155,41 @@ class InAppPurchaseService {
     try {
       console.log('[IAP] Starting purchase for:', productId);
       
-      // Request the purchase
-      const purchase = await ExpoIAP.requestSubscription({ 
-        sku: productId,
-        // For Android, you can specify offer tokens if using subscription offers
-        ...(Platform.OS === 'android' && {
-          subscriptionOffers: [{ sku: productId, offerToken: '' }]
-        })
-      });
+      // Request the subscription purchase
+      const response = await ExpoIAP.requestSubscription({ sku: productId });
+      console.log('[IAP] Purchase response:', response);
 
-      console.log('[IAP] Purchase result:', purchase);
-
-      if (purchase && purchase.length > 0) {
-        const transaction = purchase[0];
-        
-        // Acknowledge/Finish the purchase
-        if (Platform.OS === 'android' && !transaction.isAcknowledgedAndroid) {
-          await ExpoIAP.acknowledgePurchaseAndroid({ token: transaction.purchaseToken! });
-        } else if (Platform.OS === 'ios') {
-          await ExpoIAP.finishTransaction({ purchase: transaction });
+      // Handle response - could be direct result or in results array
+      const purchase = response?.results?.[0] || response?.[0] || response;
+      
+      if (purchase && (purchase.transactionId || purchase.purchaseToken)) {
+        // Finish the transaction
+        try {
+          if (typeof ExpoIAP.finishTransactionAsync === 'function') {
+            await ExpoIAP.finishTransactionAsync({ purchase, isConsumable: false });
+          } else if (typeof ExpoIAP.finishTransaction === 'function') {
+            await ExpoIAP.finishTransaction({ purchase });
+          }
+        } catch (finishError) {
+          console.log('[IAP] Finish transaction note:', finishError);
         }
 
         return {
           success: true,
-          transactionId: transaction.transactionId || transaction.purchaseToken,
-          productId: transaction.productId,
+          transactionId: purchase.transactionId || purchase.purchaseToken,
+          productId: purchase.productId || productId,
           receipt: Platform.OS === 'ios' 
-            ? transaction.transactionReceipt 
-            : transaction.purchaseToken,
+            ? purchase.transactionReceipt 
+            : purchase.purchaseToken,
+        };
+      }
+
+      // Check if response indicates success
+      if (response?.responseCode === ExpoIAP.IAPResponseCode?.OK) {
+        return {
+          success: true,
+          transactionId: 'pending',
+          productId: productId,
         };
       }
 
@@ -196,14 +198,16 @@ class InAppPurchaseService {
       console.error('[IAP] Purchase error:', error);
       
       // Check if user cancelled
-      if (error.code === 'E_USER_CANCELLED' || 
-          error.message?.includes('cancelled') ||
-          error.message?.includes('canceled')) {
+      const errorMsg = error.message || error.toString() || '';
+      if (errorMsg.includes('cancel') || 
+          errorMsg.includes('Cancel') ||
+          error.code === 'E_USER_CANCELLED' ||
+          error.code === 2) {
         return { success: false, cancelled: true, error: 'Acquisto annullato' };
       }
 
-      // Check for already owned (for non-consumables)
-      if (error.code === 'E_ALREADY_OWNED') {
+      // Check for already owned
+      if (errorMsg.includes('already') || error.code === 'E_ALREADY_OWNED') {
         return { success: false, error: 'Hai già un abbonamento attivo' };
       }
 
@@ -235,7 +239,8 @@ class InAppPurchaseService {
     try {
       console.log('[IAP] Restoring purchases...');
       
-      const purchases = await ExpoIAP.getAvailablePurchases();
+      const response = await ExpoIAP.getAvailablePurchases();
+      const purchases = response?.results || response || [];
       console.log('[IAP] Restored purchases:', purchases);
 
       if (purchases && purchases.length > 0) {
@@ -259,10 +264,10 @@ class InAppPurchaseService {
   // Check current subscription status
   async getCurrentSubscription(): Promise<{ isActive: boolean; productId?: string; expiresAt?: Date }> {
     try {
-      const purchases = await ExpoIAP.getAvailablePurchases();
+      const response = await ExpoIAP.getAvailablePurchases();
+      const purchases = response?.results || response || [];
       
       if (purchases && purchases.length > 0) {
-        // Find the most recent subscription
         const subscription = purchases.find((p: any) => 
           p.productId?.includes('subscription')
         );
@@ -284,28 +289,6 @@ class InAppPurchaseService {
       return { isActive: false };
     }
   }
-
-  // Set up purchase listeners
-  setupPurchaseListeners(
-    onPurchaseUpdate: (purchase: any) => void,
-    onPurchaseError: (error: any) => void
-  ): void {
-    // Note: expo-iap handles listeners internally
-    // These callbacks would be used with the event emitter if available
-    console.log('[IAP] Purchase listeners set up');
-  }
-
-  // Remove purchase listeners
-  removePurchaseListeners(): void {
-    if (this.purchaseUpdateSubscription) {
-      this.purchaseUpdateSubscription.remove();
-      this.purchaseUpdateSubscription = null;
-    }
-    if (this.purchaseErrorSubscription) {
-      this.purchaseErrorSubscription.remove();
-      this.purchaseErrorSubscription = null;
-    }
-  }
 }
 
 // Singleton instance
@@ -314,18 +297,11 @@ export const iapService = new InAppPurchaseService();
 // Helper function to determine if we should use native IAP
 export function shouldUseNativeIAP(): boolean {
   // Use native IAP on iOS and Android when running on device
-  // For web or development, fall back to Stripe
+  // For web, fall back to Stripe
   if (Platform.OS === 'web') {
     return false;
   }
   
-  // Check if this is a store build (not Expo Go)
-  // In production builds, __DEV__ is false
-  if (__DEV__) {
-    // In development, you can test IAP with sandbox accounts
-    // but for Expo Go, IAP is not available
-    return false; // Return false for Expo Go testing
-  }
-  
+  // Always use native IAP on mobile (even in dev builds for testing)
   return true;
 }
