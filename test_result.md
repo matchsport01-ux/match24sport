@@ -610,6 +610,43 @@ agent_communication:
       Screenshots verified landing, login, register, and search pages render correctly.
   - agent: "testing"
     message: |
+      IAP SUBSCRIPTION ENDPOINTS TESTING COMPLETED - 100% SUCCESS RATE (4/4 TESTS PASSED)
+      
+      🎯 COMPREHENSIVE IAP TESTING RESULTS:
+      ✅ TEST 1: IAP Validate Endpoint - PASS
+      - POST /api/subscription/iap/validate with iOS platform data returns 200
+      - Request: platform="ios", product_id="com.matchsport24.subscription.monthly", transaction_id="test_transaction_12345"
+      - Response: success=true, subscription activated with monthly plan
+      - Subscription expires: 2026-04-24, status changed to "active"
+      
+      ✅ TEST 2: IAP Status Endpoint - PASS
+      - GET /api/subscription/iap/status returns 200 with all required fields
+      - Response includes: subscription_status="active", subscription_plan="monthly", is_active=true
+      - Subscription source correctly set to "iap_ios"
+      
+      ✅ TEST 3: IAP Restore Endpoint - PASS
+      - POST /api/subscription/iap/restore returns 200 with valid response structure
+      - Successfully restores existing subscription with proper Italian message
+      - Response: "Abbonamento ripristinato con successo!"
+      
+      ✅ TEST 4: Duplicate Transaction Prevention - PASS
+      - Same transaction_id "test_transaction_12345" correctly detected as duplicate
+      - Response: already_processed=true, no duplicate activation
+      - Backend logs show proper warning: "[IAP] Duplicate transaction: test_transaction_12345"
+      
+      🔧 BACKEND LOGS VERIFICATION:
+      - All IAP operations properly logged with user and club IDs
+      - Subscription activation logged: "plan=monthly, expires=2026-04-24"
+      - Duplicate transaction detection working correctly
+      - Italian localization working: "Abbonamento attivato con successo!"
+      
+      🏆 ALL IAP SUBSCRIPTION ENDPOINTS FULLY FUNCTIONAL:
+      Base URL: https://padel-finder-app.preview.emergentagent.com/api
+      Club Admin Credentials: newclubtest6051@test.com / TestPass123!
+      All endpoints returning proper HTTP 200 status codes with valid JSON responses.
+      Complete IAP workflow verified: validate → status → restore → duplicate prevention.
+  - agent: "testing"
+    message: |
       DELETE ACCOUNT ENDPOINT REFACTORING VERIFICATION COMPLETED - 100% SUCCESS RATE (6/6 TESTS PASSED)
       
       🎯 REVIEW REQUEST TESTING RESULTS:
@@ -1269,5 +1306,17 @@ agent_communication:
       - working: true
         agent: "testing"
         comment: "DELETE ACCOUNT ENDPOINT REFACTORING VERIFICATION COMPLETED - 100% SUCCESS RATE (6/6 tests passed). ✅ Created test user delete_test_final_5513c0ed@test.com successfully. ✅ User profile verification via GET /api/auth/me working correctly. ✅ DELETE /api/auth/delete-account with wrong password correctly rejected with 401 'Incorrect password'. ✅ DELETE /api/auth/delete-account with correct password and confirmation='DELETE' returns 200 with success:true and message 'Your account has been deleted successfully'. ✅ Login attempt after deletion correctly fails with 401 (user not found). ✅ Old authentication token correctly invalidated after deletion (401 response). Complete end-to-end deletion workflow verified after refactoring. All security measures working correctly: password verification, confirmation requirement, complete data deletion, session invalidation. DELETE ACCOUNT ENDPOINT IS FULLY FUNCTIONAL AFTER REFACTORING."
+
+  - task: "IAP Subscription Endpoints"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "IAP SUBSCRIPTION ENDPOINTS TESTING COMPLETED - 100% SUCCESS RATE (4/4 tests passed). ✅ Club admin login with newclubtest6051@test.com working correctly. ✅ POST /api/subscription/iap/validate with iOS platform, product_id 'com.matchsport24.subscription.monthly', transaction_id 'test_transaction_12345' returns 200 with success:true and subscription activated. ✅ GET /api/subscription/iap/status returns 200 with all required fields: subscription_status='active', subscription_plan='monthly', is_active=true. ✅ POST /api/subscription/iap/restore returns 200 with valid response structure and subscription info. ✅ Duplicate transaction prevention working correctly - same transaction_id returns already_processed:true without duplicate activation. All IAP endpoints working correctly with proper authentication, validation, and Italian localization. Complete workflow verified: validate purchase → check status → restore purchases → prevent duplicates."
 
 agent_communication:

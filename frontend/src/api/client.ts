@@ -438,6 +438,28 @@ class APIClient {
     const response = await this.client.get('/club/matches/pending-results');
     return response.data;
   }
+
+  // In-App Purchase (iOS/Android)
+  async validateIAPPurchase(data: {
+    platform: 'ios' | 'android';
+    product_id: string;
+    transaction_id: string;
+    receipt: string;
+    plan_id: string;
+  }) {
+    const response = await this.client.post('/subscription/iap/validate', data);
+    return response.data;
+  }
+
+  async restoreIAPPurchases() {
+    const response = await this.client.post('/subscription/iap/restore');
+    return response.data;
+  }
+
+  async getIAPSubscriptionStatus() {
+    const response = await this.client.get('/subscription/iap/status');
+    return response.data;
+  }
 }
 
 export const apiClient = new APIClient();

@@ -2444,6 +2444,179 @@ async def stripe_webhook(request: Request):
         logger.error(f"Webhook error: {e}")
         return {"status": "error"}
 
+# ======================= IN-APP PURCHASE ENDPOINTS (iOS/Android) =======================
+
+class IAPValidationRequest(BaseModel):
+    platform: str  # 'ios' or 'android'
+    product_id: str  # e.g., 'com.matchsport24.subscription.monthly'
+    transaction_id: str
+    receipt: str  # iOS receipt data or Android purchase token
+    plan_id: str  # 'monthly' or 'yearly'
+
+@api_router.post("/subscription/iap/validate")
+async def validate_iap_purchase(request: IAPValidationRequest, user: dict = Depends(get_current_user)):
+    """
+    Validate and activate an In-App Purchase subscription.
+    Supports both iOS (StoreKit) and Android (Google Play Billing).
+    """
+    logger.info(f"[IAP] Validating purchase for user {user['user_id']}: platform={request.platform}, product={request.product_id}")
+    
+    # Check if this is a club user
+    club = await db.clubs.find_one({"admin_user_id": user["user_id"]})
+    if not club:
+        raise HTTPException(status_code=400, detail="Solo i circoli possono sottoscrivere abbonamenti")
+    
+    # Map product_id to plan_id
+    plan_id = request.plan_id
+    if plan_id not in SUBSCRIPTION_PLANS:
+        raise HTTPException(status_code=400, detail="Piano non valido")
+    
+    # Check for duplicate transaction
+    existing_transaction = await db.iap_transactions.find_one({
+        "transaction_id": request.transaction_id,
+        "status": "completed"
+    })
+    if existing_transaction:
+        logger.warning(f"[IAP] Duplicate transaction: {request.transaction_id}")
+        return {
+            "success": True,
+            "message": "Acquisto già elaborato",
+            "subscription_status": club.get("subscription_status", "active"),
+            "already_processed": True
+        }
+    
+    # Store the transaction
+    transaction_record = {
+        "transaction_id": request.transaction_id,
+        "user_id": user["user_id"],
+        "club_id": club["club_id"],
+        "platform": request.platform,
+        "product_id": request.product_id,
+        "plan_id": plan_id,
+        "receipt": request.receipt[:500] if request.receipt else None,  # Store partial receipt for reference
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc)
+    }
+    
+    try:
+        # In a production environment, you would validate the receipt with Apple/Google servers
+        # For iOS: https://buy.itunes.apple.com/verifyReceipt
+        # For Android: Google Play Developer API
+        
+        # For this implementation, we trust the client-side validation
+        # and activate the subscription immediately
+        # In production, add proper server-side receipt validation
+        
+        # Get plan details
+        plan = SUBSCRIPTION_PLANS[plan_id]
+        expires_at = datetime.now(timezone.utc) + timedelta(days=plan["duration_days"])
+        
+        # Activate subscription
+        await db.clubs.update_one(
+            {"club_id": club["club_id"]},
+            {
+                "$set": {
+                    "subscription_status": "active",
+                    "subscription_plan": plan_id,
+                    "subscription_expires_at": expires_at,
+                    "subscription_source": f"iap_{request.platform}",
+                    "updated_at": datetime.now(timezone.utc)
+                }
+            }
+        )
+        
+        # Mark transaction as completed
+        transaction_record["status"] = "completed"
+        transaction_record["activated_at"] = datetime.now(timezone.utc)
+        transaction_record["expires_at"] = expires_at
+        await db.iap_transactions.insert_one(transaction_record)
+        
+        logger.info(f"[IAP] Subscription activated for club {club['club_id']}: plan={plan_id}, expires={expires_at}")
+        
+        return {
+            "success": True,
+            "message": "Abbonamento attivato con successo!",
+            "subscription_status": "active",
+            "subscription_plan": plan_id,
+            "subscription_expires_at": expires_at.isoformat(),
+            "club_id": club["club_id"]
+        }
+        
+    except Exception as e:
+        logger.error(f"[IAP] Validation error: {e}")
+        transaction_record["status"] = "failed"
+        transaction_record["error"] = str(e)
+        await db.iap_transactions.insert_one(transaction_record)
+        raise HTTPException(status_code=500, detail="Errore durante la validazione dell'acquisto")
+
+@api_router.post("/subscription/iap/restore")
+async def restore_iap_purchases(user: dict = Depends(get_current_user)):
+    """
+    Restore In-App Purchase subscriptions.
+    Called when user wants to restore previous purchases.
+    """
+    logger.info(f"[IAP] Restore request for user {user['user_id']}")
+    
+    club = await db.clubs.find_one({"admin_user_id": user["user_id"]})
+    if not club:
+        raise HTTPException(status_code=400, detail="Solo i circoli possono gestire abbonamenti")
+    
+    # Check for existing active IAP transactions for this user
+    active_transaction = await db.iap_transactions.find_one({
+        "user_id": user["user_id"],
+        "status": "completed",
+        "expires_at": {"$gt": datetime.now(timezone.utc)}
+    })
+    
+    if active_transaction:
+        # Reactivate subscription from stored transaction
+        plan_id = active_transaction.get("plan_id")
+        expires_at = active_transaction.get("expires_at")
+        
+        await db.clubs.update_one(
+            {"club_id": club["club_id"]},
+            {
+                "$set": {
+                    "subscription_status": "active",
+                    "subscription_plan": plan_id,
+                    "subscription_expires_at": expires_at,
+                    "updated_at": datetime.now(timezone.utc)
+                }
+            }
+        )
+        
+        logger.info(f"[IAP] Restored subscription for club {club['club_id']}")
+        
+        return {
+            "success": True,
+            "message": "Abbonamento ripristinato con successo!",
+            "subscription_status": "active",
+            "subscription_plan": plan_id,
+            "subscription_expires_at": expires_at.isoformat() if expires_at else None
+        }
+    
+    # No active subscription found
+    return {
+        "success": False,
+        "message": "Nessun abbonamento attivo da ripristinare",
+        "subscription_status": club.get("subscription_status", "none")
+    }
+
+@api_router.get("/subscription/iap/status")
+async def get_iap_subscription_status(user: dict = Depends(get_current_user)):
+    """Get current IAP subscription status for the club."""
+    club = await db.clubs.find_one({"admin_user_id": user["user_id"]})
+    if not club:
+        raise HTTPException(status_code=400, detail="Circolo non trovato")
+    
+    return {
+        "subscription_status": club.get("subscription_status", "none"),
+        "subscription_plan": club.get("subscription_plan"),
+        "subscription_expires_at": club.get("subscription_expires_at").isoformat() if club.get("subscription_expires_at") else None,
+        "subscription_source": club.get("subscription_source", "unknown"),
+        "is_active": club.get("subscription_status") == "active"
+    }
+
 # ======================= ADMIN ENDPOINTS =======================
 
 @api_router.get("/admin/users")

@@ -19,6 +19,8 @@ import { useLanguage } from '../../src/contexts/LanguageContext';
 import { COLORS } from '../../src/utils/constants';
 import { apiClient } from '../../src/api/client';
 import { format, parseISO } from 'date-fns';
+import { iapService, shouldUseNativeIAP, PLAN_TO_PRODUCT_ID } from '../../src/services/iapService';
+import { successHaptic, errorHaptic } from '../../src/utils/haptics';
 
 export default function ClubSubscriptionScreen() {
   const router = useRouter();
@@ -36,11 +38,39 @@ export default function ClubSubscriptionScreen() {
   const [promoValue, setPromoValue] = useState(0);
   const [promoMessage, setPromoMessage] = useState('');
   const [isValidatingPromo, setIsValidatingPromo] = useState(false);
+  const [iapInitialized, setIapInitialized] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   const plans = {
     monthly: { name: t('monthly'), price: 49.99, period: t('per_month') },
     yearly: { name: t('yearly'), price: 399.99, period: t('per_year'), savings: '33%' },
   };
+
+  // Initialize IAP on mount if on mobile
+  useEffect(() => {
+    const initIAP = async () => {
+      if (shouldUseNativeIAP()) {
+        try {
+          const initialized = await iapService.initialize();
+          setIapInitialized(initialized);
+          if (initialized) {
+            // Fetch products from store
+            await iapService.getProducts();
+          }
+        } catch (error) {
+          console.log('[Subscription] IAP init error:', error);
+        }
+      }
+    };
+    
+    initIAP();
+    
+    return () => {
+      if (shouldUseNativeIAP()) {
+        iapService.disconnect();
+      }
+    };
+  }, []);
 
   const validatePromoCode = async () => {
     if (!promoCode.trim()) {
@@ -141,26 +171,62 @@ export default function ClubSubscriptionScreen() {
     }
   }, [session_id]);
 
-  const handleSubscribe = async () => {
-    // If a trial promo is applied, activate it directly
-    if (promoApplied && promoType === 'trial_months') {
-      setIsProcessing(true);
-      try {
-        const result = await apiClient.applyTrialPromo(promoCode.trim().toUpperCase());
-        if (result.success) {
-          Alert.alert('Successo', result.message);
-          await fetchClub();
-          removePromoCode();
-        }
-      } catch (error: any) {
-        Alert.alert('Errore', error.response?.data?.detail || 'Impossibile attivare la prova');
-      } finally {
-        setIsProcessing(false);
-      }
+  // Handle IAP purchase for mobile
+  const handleIAPPurchase = async () => {
+    const productId = PLAN_TO_PRODUCT_ID[selectedPlan];
+    if (!productId) {
+      Alert.alert('Errore', 'Piano non disponibile');
       return;
     }
 
-    // Otherwise proceed with Stripe checkout
+    setIsProcessing(true);
+    try {
+      console.log('[Subscription] Starting IAP purchase for:', selectedPlan, productId);
+      
+      const result = await iapService.purchaseByPlan(selectedPlan);
+      
+      if (result.cancelled) {
+        // User cancelled - no error message needed
+        setIsProcessing(false);
+        return;
+      }
+      
+      if (!result.success) {
+        errorHaptic();
+        Alert.alert('Errore', result.error || 'Acquisto non completato');
+        setIsProcessing(false);
+        return;
+      }
+
+      // Validate with backend
+      console.log('[Subscription] Validating purchase with backend...');
+      const validation = await apiClient.validateIAPPurchase({
+        platform: Platform.OS as 'ios' | 'android',
+        product_id: productId,
+        transaction_id: result.transactionId!,
+        receipt: result.receipt || '',
+        plan_id: selectedPlan,
+      });
+
+      if (validation.success) {
+        successHaptic();
+        Alert.alert('Successo!', 'Abbonamento attivato con successo!');
+        await fetchClub();
+      } else {
+        errorHaptic();
+        Alert.alert('Errore', validation.message || 'Impossibile attivare l\'abbonamento');
+      }
+    } catch (error: any) {
+      console.error('[Subscription] IAP error:', error);
+      errorHaptic();
+      Alert.alert('Errore', error.message || 'Errore durante l\'acquisto');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Handle Stripe checkout for web
+  const handleStripeCheckout = async () => {
     setIsProcessing(true);
     try {
       const originUrl = Platform.OS === 'web' 
@@ -183,6 +249,78 @@ export default function ClubSubscriptionScreen() {
     }
   };
 
+  // Restore purchases
+  const handleRestorePurchases = async () => {
+    setIsRestoring(true);
+    try {
+      // First try local restore via IAP
+      if (shouldUseNativeIAP() && iapInitialized) {
+        const restoreResults = await iapService.restorePurchases();
+        
+        // If found purchases, validate with backend
+        const validPurchase = restoreResults.find(r => r.success && r.receipt);
+        if (validPurchase) {
+          const validation = await apiClient.validateIAPPurchase({
+            platform: Platform.OS as 'ios' | 'android',
+            product_id: validPurchase.productId!,
+            transaction_id: validPurchase.transactionId!,
+            receipt: validPurchase.receipt || '',
+            plan_id: validPurchase.productId?.includes('yearly') ? 'yearly' : 'monthly',
+          });
+          
+          if (validation.success) {
+            successHaptic();
+            Alert.alert('Successo!', 'Abbonamento ripristinato con successo!');
+            await fetchClub();
+            return;
+          }
+        }
+      }
+
+      // Also try backend restore
+      const backendRestore = await apiClient.restoreIAPPurchases();
+      if (backendRestore.success) {
+        successHaptic();
+        Alert.alert('Successo!', backendRestore.message);
+        await fetchClub();
+      } else {
+        Alert.alert('Info', backendRestore.message || 'Nessun abbonamento da ripristinare');
+      }
+    } catch (error: any) {
+      console.error('[Subscription] Restore error:', error);
+      Alert.alert('Errore', 'Impossibile ripristinare gli acquisti');
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  const handleSubscribe = async () => {
+    // If a trial promo is applied, activate it directly
+    if (promoApplied && promoType === 'trial_months') {
+      setIsProcessing(true);
+      try {
+        const result = await apiClient.applyTrialPromo(promoCode.trim().toUpperCase());
+        if (result.success) {
+          Alert.alert('Successo', result.message);
+          await fetchClub();
+          removePromoCode();
+        }
+      } catch (error: any) {
+        Alert.alert('Errore', error.response?.data?.detail || 'Impossibile attivare la prova');
+      } finally {
+        setIsProcessing(false);
+      }
+      return;
+    }
+
+    // Use native IAP on mobile, Stripe on web
+    if (shouldUseNativeIAP()) {
+      await handleIAPPurchase();
+    } else {
+      await handleStripeCheckout();
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active': return COLORS.success;
@@ -199,6 +337,14 @@ export default function ClubSubscriptionScreen() {
       case 'expired': return 'Scaduto';
       default: return status;
     }
+  };
+
+  // Get payment method label
+  const getPaymentMethodLabel = () => {
+    if (shouldUseNativeIAP()) {
+      return Platform.OS === 'ios' ? 'App Store' : 'Google Play';
+    }
+    return 'Stripe';
   };
 
   if (isLoading) {
@@ -292,50 +438,52 @@ export default function ClubSubscriptionScreen() {
           </TouchableOpacity>
         ))}
 
-        {/* Promo Code Section */}
-        <Card style={styles.promoCard}>
-          <View style={styles.promoHeader}>
-            <Ionicons name="pricetag-outline" size={20} color={COLORS.accent} />
-            <Text style={styles.promoTitle}>Codice Promozionale</Text>
-          </View>
-          {promoApplied ? (
-            <View style={styles.promoAppliedContainer}>
-              <View style={styles.promoAppliedBadge}>
-                <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
-                <Text style={styles.promoAppliedText}>
-                  {promoType === 'trial_months' 
-                    ? `${promoValue} mesi di prova gratuita` 
-                    : `Sconto ${promoDiscount}% applicato`}
-                </Text>
+        {/* Promo Code Section - Only show if not using IAP */}
+        {!shouldUseNativeIAP() && (
+          <Card style={styles.promoCard}>
+            <View style={styles.promoHeader}>
+              <Ionicons name="pricetag-outline" size={20} color={COLORS.accent} />
+              <Text style={styles.promoTitle}>Codice Promozionale</Text>
+            </View>
+            {promoApplied ? (
+              <View style={styles.promoAppliedContainer}>
+                <View style={styles.promoAppliedBadge}>
+                  <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
+                  <Text style={styles.promoAppliedText}>
+                    {promoType === 'trial_months' 
+                      ? `${promoValue} mesi di prova gratuita` 
+                      : `Sconto ${promoDiscount}% applicato`}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={removePromoCode} style={styles.removePromoButton}>
+                  <Ionicons name="close-circle" size={24} color={COLORS.error} />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity onPress={removePromoCode} style={styles.removePromoButton}>
-                <Ionicons name="close-circle" size={24} color={COLORS.error} />
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.promoInputContainer}>
-              <TextInput
-                style={styles.promoInput}
-                placeholder="Inserisci codice"
-                placeholderTextColor={COLORS.textMuted}
-                value={promoCode}
-                onChangeText={setPromoCode}
-                autoCapitalize="characters"
-              />
-              <TouchableOpacity
-                style={styles.promoButton}
-                onPress={validatePromoCode}
-                disabled={isValidatingPromo}
-              >
-                {isValidatingPromo ? (
-                  <Ionicons name="hourglass-outline" size={20} color={COLORS.text} />
-                ) : (
-                  <Text style={styles.promoButtonText}>Applica</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
-        </Card>
+            ) : (
+              <View style={styles.promoInputContainer}>
+                <TextInput
+                  style={styles.promoInput}
+                  placeholder="Inserisci codice"
+                  placeholderTextColor={COLORS.textMuted}
+                  value={promoCode}
+                  onChangeText={setPromoCode}
+                  autoCapitalize="characters"
+                />
+                <TouchableOpacity
+                  style={styles.promoButton}
+                  onPress={validatePromoCode}
+                  disabled={isValidatingPromo}
+                >
+                  {isValidatingPromo ? (
+                    <Ionicons name="hourglass-outline" size={20} color={COLORS.text} />
+                  ) : (
+                    <Text style={styles.promoButtonText}>Applica</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+          </Card>
+        )}
 
         {/* Features */}
         <Card style={styles.featuresCard}>
@@ -369,8 +517,24 @@ export default function ClubSubscriptionScreen() {
           style={styles.subscribeButton}
         />
 
+        {/* Restore Purchases - Only for mobile */}
+        {shouldUseNativeIAP() && (
+          <TouchableOpacity 
+            style={styles.restoreButton}
+            onPress={handleRestorePurchases}
+            disabled={isRestoring}
+          >
+            <Text style={styles.restoreButtonText}>
+              {isRestoring ? 'Ripristino in corso...' : 'Ripristina acquisti'}
+            </Text>
+          </TouchableOpacity>
+        )}
+
         <Text style={styles.disclaimer}>
-          Pagamento sicuro tramite Stripe. Puoi cancellare in qualsiasi momento.
+          Pagamento sicuro tramite {getPaymentMethodLabel()}.{' '}
+          {shouldUseNativeIAP() 
+            ? 'L\'abbonamento si rinnova automaticamente.'
+            : 'Puoi cancellare in qualsiasi momento.'}
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -614,6 +778,16 @@ const styles = StyleSheet.create({
   },
   subscribeButton: {
     marginBottom: 12,
+  },
+  restoreButton: {
+    alignItems: 'center',
+    padding: 12,
+    marginBottom: 12,
+  },
+  restoreButtonText: {
+    fontSize: 14,
+    color: COLORS.accent,
+    textDecorationLine: 'underline',
   },
   disclaimer: {
     fontSize: 12,
