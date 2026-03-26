@@ -84,11 +84,35 @@ export function shouldUseNativeIAP(): boolean {
   return Platform.OS === 'ios' || Platform.OS === 'android';
 }
 
+// Check if we're running in Expo Go (which doesn't support custom native modules)
+function isExpoGo(): boolean {
+  try {
+    // In Expo Go, Constants.appOwnership is 'expo'
+    // In standalone/dev builds, it's 'standalone' or undefined
+    const Constants = require('expo-constants').default;
+    return Constants.appOwnership === 'expo';
+  } catch {
+    return false;
+  }
+}
+
+// Check if the native IAP module is actually available
+function isNativeIAPModuleAvailable(): boolean {
+  try {
+    // Try to access the native module directly
+    const { NativeModules } = require('react-native');
+    // expo-iap uses 'ExpoIap' as the native module name
+    return !!NativeModules.ExpoIap;
+  } catch {
+    return false;
+  }
+}
+
 // ============================================================================
-// WEB FALLBACK HOOK (No native IAP on web)
+// WEB/EXPO GO FALLBACK HOOK (No native IAP available)
 // ============================================================================
 
-function useSubscriptionWeb(): UseSubscriptionResult {
+function useSubscriptionFallback(reason: string): UseSubscriptionResult {
   return {
     state: 'unavailable',
     isConnected: false,
@@ -97,10 +121,15 @@ function useSubscriptionWeb(): UseSubscriptionResult {
     isRestoring: false,
     isReady: false,
     products: [],
-    error: null,
-    debugInfo: 'IAP non disponibile (web) - Usa Stripe',
-    purchaseSubscription: async () => ({ success: false, error: 'Use Stripe on web' }),
-    restorePurchases: async () => ({ success: false, message: 'Not available on web' }),
+    error: {
+      code: 'IAP_UNAVAILABLE',
+      message: reason,
+      step: 'INIT',
+      timestamp: new Date(),
+    },
+    debugInfo: reason,
+    purchaseSubscription: async () => ({ success: false, error: reason }),
+    restorePurchases: async () => ({ success: false, message: reason }),
     refreshProducts: async () => {},
     retryConnection: () => {},
   };
@@ -524,11 +553,21 @@ function useSubscriptionNative(): UseSubscriptionResult {
 // ============================================================================
 
 export function useSubscription(): UseSubscriptionResult {
-  // On web, return fallback immediately without loading expo-iap
+  // On web, return fallback immediately
   if (Platform.OS === 'web') {
-    return useSubscriptionWeb();
+    return useSubscriptionFallback('IAP non disponibile (web) - Usa Stripe');
   }
   
-  // On native platforms, use the full IAP implementation
+  // Check if running in Expo Go (doesn't support custom native modules)
+  if (isExpoGo()) {
+    return useSubscriptionFallback('IAP non disponibile in Expo Go. Serve una build nativa (TestFlight o Development Build).');
+  }
+  
+  // Check if native module is actually available
+  if (!isNativeIAPModuleAvailable()) {
+    return useSubscriptionFallback('Modulo nativo ExpoIap non trovato. Serve una build nativa con expo-iap.');
+  }
+  
+  // On native platforms with module available, use the full IAP implementation
   return useSubscriptionNative();
 }
