@@ -2466,6 +2466,10 @@ async def validate_iap_purchase(request: IAPValidationRequest, user: dict = Depe
     if not club:
         raise HTTPException(status_code=400, detail="Solo i circoli possono sottoscrivere abbonamenti")
     
+    # Validate platform
+    if request.platform not in ["ios", "android"]:
+        raise HTTPException(status_code=400, detail="Piattaforma non supportata")
+    
     # Map product_id to plan_id
     plan_id = request.plan_id
     if plan_id not in SUBSCRIPTION_PLANS:
