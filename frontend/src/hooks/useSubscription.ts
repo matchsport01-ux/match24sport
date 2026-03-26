@@ -224,8 +224,8 @@ function useSubscriptionNative(): UseSubscriptionResult {
           }
         }, CONNECTION_TIMEOUT);
 
-        // Initialize IAP
-        const { initConnection, purchaseUpdatedListener, purchaseErrorListener, getSubscriptions } = iapModule;
+        // Initialize IAP - expo-iap 3.4.12 API
+        const { initConnection, purchaseUpdatedListener, purchaseErrorListener, fetchProducts } = iapModule;
         
         // Store functions for later use
         iapFunctionsRef.current = iapModule;
@@ -294,8 +294,19 @@ function useSubscriptionNative(): UseSubscriptionResult {
       }, FETCH_PRODUCTS_TIMEOUT);
 
       try {
-        const { getSubscriptions } = iapFunctionsRef.current;
-        const subs = await getSubscriptions({ skus: ACTIVE_SUBSCRIPTION_SKUS });
+        // expo-iap 3.4.12 uses fetchProducts, NOT getSubscriptions
+        const { fetchProducts } = iapFunctionsRef.current;
+        
+        // Log available functions for debugging
+        log('DEBUG', 'FETCH', 'Available IAP functions:', Object.keys(iapFunctionsRef.current));
+        log('DEBUG', 'FETCH', 'fetchProducts type:', typeof fetchProducts);
+        
+        if (typeof fetchProducts !== 'function') {
+          throw new Error('fetchProducts is not a function in expo-iap module');
+        }
+        
+        // Call fetchProducts with type: 'subs' for subscriptions
+        const subs = await fetchProducts({ skus: ACTIVE_SUBSCRIPTION_SKUS, type: 'subs' });
         
         if (fetchTimeoutRef.current) {
           clearTimeout(fetchTimeoutRef.current);
@@ -504,8 +515,9 @@ function useSubscriptionNative(): UseSubscriptionResult {
     setDebugInfo('Ricaricamento prodotti...');
 
     try {
-      const { getSubscriptions } = iapFunctionsRef.current;
-      const subs = await getSubscriptions({ skus: ACTIVE_SUBSCRIPTION_SKUS });
+      // expo-iap 3.4.12 uses fetchProducts, NOT getSubscriptions
+      const { fetchProducts } = iapFunctionsRef.current;
+      const subs = await fetchProducts({ skus: ACTIVE_SUBSCRIPTION_SKUS, type: 'subs' });
       
       if (subs && subs.length > 0) {
         setSubscriptions(subs);
