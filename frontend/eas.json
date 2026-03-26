@@ -35,7 +35,7 @@
         "EXPO_PUBLIC_BACKEND_URL": "https://padel-finder-app.emergent.host"
       },
       "cache": {
-        "key": "v7-iap-entitlement-fix",
+        "key": "v8-iap-product-id-v2",
         "paths": []
       }
     }

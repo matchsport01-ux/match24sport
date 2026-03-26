@@ -2448,7 +2448,7 @@ async def stripe_webhook(request: Request):
 
 class IAPValidationRequest(BaseModel):
     platform: str  # 'ios' or 'android'
-    product_id: str  # e.g., 'com.matchsport24.subscription.monthly'
+    product_id: str  # e.g., 'com.matchsport24.subscription.monthly.v2'
     transaction_id: str
     receipt: str  # iOS receipt data or Android purchase token
     plan_id: str  # 'monthly' or 'yearly'

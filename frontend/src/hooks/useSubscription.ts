@@ -10,8 +10,8 @@ import { apiClient } from '../api/client';
 
 // Product IDs - MUST match EXACTLY what's in App Store Connect / Google Play Console
 export const PRODUCT_IDS = {
-  MONTHLY: 'com.matchsport24.subscription.monthly',
-  YEARLY: 'com.matchsport24.subscription.yearly',
+  MONTHLY: 'com.matchsport24.subscription.monthly.v2',
+  YEARLY: 'com.matchsport24.subscription.yearly.v2',
 };
 
 // Active SKUs to fetch (only monthly for now)
