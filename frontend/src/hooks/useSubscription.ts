@@ -1,9 +1,7 @@
 // useSubscription.ts - Hook for native iOS StoreKit and Android Google Play Billing
-// Uses expo-iap's useIAP hook with comprehensive logging and error handling
+// Handles web platform gracefully without importing native modules
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Platform } from 'react-native';
-import { useIAP } from 'expo-iap';
-import type { Purchase, ProductSubscription } from 'expo-iap';
 import { apiClient } from '../api/client';
 
 // ============================================================================
@@ -30,7 +28,6 @@ const CONNECTION_TIMEOUT = 10000; // 10 seconds
 type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
 
 const log = (level: LogLevel, step: string, message: string, data?: any) => {
-  const timestamp = new Date().toISOString();
   const prefix = `[IAP][${level}][${step}]`;
   const logMessage = `${prefix} ${message}`;
   
@@ -46,15 +43,15 @@ const log = (level: LogLevel, step: string, message: string, data?: any) => {
 // ============================================================================
 
 export type IAPState = 
-  | 'initializing'      // Hook just mounted, waiting for connection
-  | 'connecting'        // Actively connecting to store
-  | 'connected'         // Connected but not yet fetched products
-  | 'fetching'          // Fetching products from store
-  | 'ready'             // Products loaded, ready for purchase
-  | 'purchasing'        // Purchase in progress
-  | 'restoring'         // Restore in progress
-  | 'error'             // Error state
-  | 'unavailable';      // IAP not available (web platform)
+  | 'initializing'
+  | 'connecting'
+  | 'connected'
+  | 'fetching'
+  | 'ready'
+  | 'purchasing'
+  | 'restoring'
+  | 'error'
+  | 'unavailable';
 
 export interface IAPError {
   code: string;
@@ -64,22 +61,15 @@ export interface IAPError {
 }
 
 export interface UseSubscriptionResult {
-  // State
   state: IAPState;
   isConnected: boolean;
   isLoading: boolean;
   isPurchasing: boolean;
   isRestoring: boolean;
   isReady: boolean;
-  
-  // Data
-  products: ProductSubscription[];
+  products: any[];
   error: IAPError | null;
-  
-  // Debug info
   debugInfo: string;
-  
-  // Actions
   purchaseSubscription: (productId: string) => Promise<{ success: boolean; error?: string }>;
   restorePurchases: () => Promise<{ success: boolean; message?: string }>;
   refreshProducts: () => Promise<void>;
@@ -95,31 +85,49 @@ export function shouldUseNativeIAP(): boolean {
 }
 
 // ============================================================================
-// MAIN HOOK
+// WEB FALLBACK HOOK (No native IAP on web)
 // ============================================================================
 
-export function useSubscription(): UseSubscriptionResult {
+function useSubscriptionWeb(): UseSubscriptionResult {
+  return {
+    state: 'unavailable',
+    isConnected: false,
+    isLoading: false,
+    isPurchasing: false,
+    isRestoring: false,
+    isReady: false,
+    products: [],
+    error: null,
+    debugInfo: 'IAP non disponibile (web) - Usa Stripe',
+    purchaseSubscription: async () => ({ success: false, error: 'Use Stripe on web' }),
+    restorePurchases: async () => ({ success: false, message: 'Not available on web' }),
+    refreshProducts: async () => {},
+    retryConnection: () => {},
+  };
+}
+
+// ============================================================================
+// NATIVE IAP HOOK (iOS/Android only)
+// ============================================================================
+
+function useSubscriptionNative(): UseSubscriptionResult {
+  // Dynamically import expo-iap only on native platforms
+  const [iapModule, setIapModule] = useState<any>(null);
+  const [iapHookResult, setIapHookResult] = useState<any>(null);
+  
   // State management
   const [state, setState] = useState<IAPState>('initializing');
   const [error, setError] = useState<IAPError | null>(null);
-  const [debugInfo, setDebugInfo] = useState<string>('Initializing...');
+  const [debugInfo, setDebugInfo] = useState<string>('Inizializzazione...');
   const [productsFetched, setProductsFetched] = useState(false);
+  const [subscriptions, setSubscriptions] = useState<any[]>([]);
+  const [connected, setConnected] = useState(false);
   
-  // Refs for timeouts and preventing double-fetch
+  // Refs
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasFetchedRef = useRef(false);
-  const retryCountRef = useRef(0);
-
-  const iapEnabled = shouldUseNativeIAP();
-
-  // Clear timeouts on unmount
-  useEffect(() => {
-    return () => {
-      if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
-      if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
-    };
-  }, []);
+  const iapFunctionsRef = useRef<any>(null);
 
   // Set error helper
   const setIAPError = useCallback((code: string, message: string, step: string) => {
@@ -129,204 +137,178 @@ export function useSubscription(): UseSubscriptionResult {
     setDebugInfo(`Errore: ${message}`);
   }, []);
 
-  // Use the expo-iap hook
-  const {
-    connected,
-    subscriptions,
-    fetchProducts,
-    requestPurchase,
-    finishTransaction,
-    restorePurchases: iapRestorePurchases,
-    availablePurchases,
-    reconnect,
-  } = useIAP(iapEnabled ? {
-    onPurchaseSuccess: async (purchase: Purchase) => {
-      log('INFO', 'PURCHASE_SUCCESS', 'Purchase success callback received', {
-        id: purchase.id,
-        productId: purchase.productId,
-        transactionId: purchase.transactionId,
-      });
-    },
-    onPurchaseError: (err) => {
-      log('ERROR', 'PURCHASE_ERROR', 'Purchase error callback', {
-        code: err.code,
-        message: err.message,
-      });
-      
-      if (err.code === 'user-cancelled' || err.message?.toLowerCase().includes('cancel')) {
-        setState('ready');
-        setDebugInfo('Acquisto annullato');
-      } else {
-        setIAPError(err.code || 'PURCHASE_ERROR', err.message || 'Errore durante l\'acquisto', 'PURCHASE');
-      }
-    },
-    onError: (err) => {
-      log('ERROR', 'GENERAL_ERROR', 'General IAP error', { message: err.message });
-    },
-  } : undefined);
-
-  // ========================================
-  // CONNECTION MONITORING
-  // ========================================
-  
+  // Load expo-iap dynamically
   useEffect(() => {
-    if (!iapEnabled) {
-      log('INFO', 'INIT', 'IAP not available on this platform');
-      setState('unavailable');
-      setDebugInfo('IAP non disponibile (web)');
-      return;
-    }
+    let mounted = true;
 
-    log('INFO', 'INIT', 'Starting IAP initialization', { platform: Platform.OS });
-    setState('connecting');
-    setDebugInfo('Connessione allo store...');
-
-    // Set connection timeout
-    connectionTimeoutRef.current = setTimeout(() => {
-      if (!connected && state === 'connecting') {
-        log('WARN', 'CONNECTION_TIMEOUT', `Connection timeout after ${CONNECTION_TIMEOUT}ms`);
-        setIAPError('CONNECTION_TIMEOUT', 'Timeout connessione store. Riprova.', 'CONNECTION');
+    const loadIAP = async () => {
+      try {
+        log('INFO', 'INIT', 'Loading expo-iap module...');
+        const expoIap = await import('expo-iap');
+        
+        if (!mounted) return;
+        
+        setIapModule(expoIap);
+        log('INFO', 'INIT', 'expo-iap module loaded successfully');
+      } catch (err: any) {
+        log('ERROR', 'INIT', 'Failed to load expo-iap', { error: err.message });
+        if (mounted) {
+          setIAPError('MODULE_LOAD_ERROR', 'Impossibile caricare il modulo IAP', 'INIT');
+        }
       }
-    }, CONNECTION_TIMEOUT);
+    };
+
+    loadIAP();
 
     return () => {
+      mounted = false;
       if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
+      if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
     };
-  }, [iapEnabled]);
+  }, []);
 
-  // ========================================
-  // FETCH PRODUCTS WHEN CONNECTED
-  // ========================================
-  
+  // Initialize IAP when module is loaded
   useEffect(() => {
-    if (!iapEnabled || !connected) return;
+    if (!iapModule) return;
 
-    // Clear connection timeout
-    if (connectionTimeoutRef.current) {
-      clearTimeout(connectionTimeoutRef.current);
-      connectionTimeoutRef.current = null;
-    }
+    let iapCleanup: (() => void) | undefined;
 
-    log('INFO', 'CONNECTED', 'Store connected successfully');
-    setState('connected');
-    setDebugInfo('Store connesso, caricamento prodotti...');
-
-    // Prevent double-fetch
-    if (hasFetchedRef.current) {
-      log('DEBUG', 'FETCH_SKIP', 'Products already fetched, skipping');
-      return;
-    }
-
-    // Fetch products
-    const doFetch = async () => {
-      hasFetchedRef.current = true;
-      setState('fetching');
-      setDebugInfo('Caricamento prodotti in corso...');
-      
-      log('INFO', 'FETCH_START', 'Starting product fetch', { 
-        skus: ACTIVE_SUBSCRIPTION_SKUS,
-        type: 'subs'
-      });
-
-      // Set fetch timeout
-      const fetchPromise = fetchProducts({
-        skus: ACTIVE_SUBSCRIPTION_SKUS,
-        type: 'subs',
-      });
-
-      const timeoutPromise = new Promise((_, reject) => {
-        fetchTimeoutRef.current = setTimeout(() => {
-          reject(new Error('FETCH_TIMEOUT'));
-        }, FETCH_PRODUCTS_TIMEOUT);
-      });
-
+    const initializeIAP = async () => {
       try {
-        await Promise.race([fetchPromise, timeoutPromise]);
+        log('INFO', 'CONNECT', 'Initializing IAP connection...');
+        setState('connecting');
+        setDebugInfo('Connessione allo store...');
+
+        // Set connection timeout
+        connectionTimeoutRef.current = setTimeout(() => {
+          if (state === 'connecting') {
+            log('WARN', 'CONNECTION_TIMEOUT', `Connection timeout after ${CONNECTION_TIMEOUT}ms`);
+            setIAPError('CONNECTION_TIMEOUT', 'Timeout connessione store. Riprova.', 'CONNECTION');
+          }
+        }, CONNECTION_TIMEOUT);
+
+        // Initialize IAP
+        const { initConnection, purchaseUpdatedListener, purchaseErrorListener, getSubscriptions } = iapModule;
         
-        if (fetchTimeoutRef.current) {
-          clearTimeout(fetchTimeoutRef.current);
-          fetchTimeoutRef.current = null;
+        // Store functions for later use
+        iapFunctionsRef.current = iapModule;
+
+        const connectionResult = await initConnection();
+        log('INFO', 'CONNECT', 'Connection result', { result: connectionResult });
+
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
         }
 
-        log('INFO', 'FETCH_COMPLETE', 'Product fetch completed', {
-          subscriptionsCount: subscriptions?.length || 0,
+        setConnected(true);
+        setState('connected');
+        setDebugInfo('Connesso, caricamento prodotti...');
+        log('INFO', 'CONNECTED', 'Store connected successfully');
+
+        // Set up purchase listeners
+        const purchaseUpdateSubscription = purchaseUpdatedListener(async (purchase: any) => {
+          log('INFO', 'PURCHASE_UPDATE', 'Purchase updated', { 
+            productId: purchase.productId,
+            transactionId: purchase.transactionId 
+          });
         });
 
-        setProductsFetched(true);
-        
-      } catch (fetchError: any) {
-        if (fetchTimeoutRef.current) {
-          clearTimeout(fetchTimeoutRef.current);
-          fetchTimeoutRef.current = null;
+        const purchaseErrorSubscription = purchaseErrorListener((err: any) => {
+          log('ERROR', 'PURCHASE_ERROR', 'Purchase error', { 
+            code: err.code, 
+            message: err.message 
+          });
+        });
+
+        iapCleanup = () => {
+          purchaseUpdateSubscription?.remove?.();
+          purchaseErrorSubscription?.remove?.();
+        };
+
+        // Fetch subscriptions
+        if (!hasFetchedRef.current) {
+          await fetchProductsInternal();
         }
 
-        if (fetchError.message === 'FETCH_TIMEOUT') {
-          log('ERROR', 'FETCH_TIMEOUT', `Product fetch timeout after ${FETCH_PRODUCTS_TIMEOUT}ms`);
-          setIAPError('FETCH_TIMEOUT', 'Timeout caricamento prodotti. Verifica connessione.', 'FETCH');
-        } else {
-          log('ERROR', 'FETCH_ERROR', 'Product fetch failed', { 
-            error: fetchError.message,
-            code: fetchError.code 
-          });
-          setIAPError(
-            fetchError.code || 'FETCH_ERROR', 
-            fetchError.message || 'Errore caricamento prodotti', 
-            'FETCH'
-          );
+      } catch (err: any) {
+        log('ERROR', 'INIT_ERROR', 'IAP initialization failed', { error: err.message });
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
         }
+        setIAPError('INIT_ERROR', err.message || 'Errore inizializzazione IAP', 'INIT');
       }
     };
 
-    doFetch();
-  }, [connected, iapEnabled]);
-
-  // ========================================
-  // UPDATE STATE WHEN SUBSCRIPTIONS CHANGE
-  // ========================================
-  
-  useEffect(() => {
-    if (!iapEnabled || !productsFetched) return;
-
-    if (subscriptions && subscriptions.length > 0) {
-      log('INFO', 'PRODUCTS_LOADED', 'Products available', {
-        count: subscriptions.length,
-        products: subscriptions.map(s => ({
-          id: s.id,
-          title: s.title,
-          price: (s as any).displayPrice || (s as any).price,
-        }))
+    const fetchProductsInternal = async () => {
+      if (!iapFunctionsRef.current) return;
+      
+      hasFetchedRef.current = true;
+      setState('fetching');
+      setDebugInfo('Caricamento prodotti...');
+      
+      log('INFO', 'FETCH_START', 'Starting product fetch', { 
+        skus: ACTIVE_SUBSCRIPTION_SKUS 
       });
-      setState('ready');
-      setError(null);
-      setDebugInfo(`${subscriptions.length} prodotto/i caricato/i`);
-    } else {
-      log('WARN', 'PRODUCTS_EMPTY', 'No products returned from store', {
-        skusRequested: ACTIVE_SUBSCRIPTION_SKUS,
-        hint: 'Verifica che il Product ID su App Store Connect corrisponda esattamente'
-      });
-      setIAPError(
-        'NO_PRODUCTS',
-        'Nessun prodotto trovato. Verifica configurazione App Store Connect.',
-        'PRODUCTS'
-      );
-    }
-  }, [subscriptions, productsFetched, iapEnabled]);
 
-  // ========================================
-  // ACTIONS
-  // ========================================
-  
+      fetchTimeoutRef.current = setTimeout(() => {
+        log('ERROR', 'FETCH_TIMEOUT', `Product fetch timeout after ${FETCH_PRODUCTS_TIMEOUT}ms`);
+        setIAPError('FETCH_TIMEOUT', 'Timeout caricamento prodotti', 'FETCH');
+      }, FETCH_PRODUCTS_TIMEOUT);
+
+      try {
+        const { getSubscriptions } = iapFunctionsRef.current;
+        const subs = await getSubscriptions({ skus: ACTIVE_SUBSCRIPTION_SKUS });
+        
+        if (fetchTimeoutRef.current) {
+          clearTimeout(fetchTimeoutRef.current);
+          fetchTimeoutRef.current = null;
+        }
+
+        log('INFO', 'FETCH_COMPLETE', 'Products fetched', { 
+          count: subs?.length || 0,
+          products: subs?.map((s: any) => ({ id: s.productId, price: s.localizedPrice }))
+        });
+
+        if (subs && subs.length > 0) {
+          setSubscriptions(subs);
+          setProductsFetched(true);
+          setState('ready');
+          setError(null);
+          setDebugInfo(`${subs.length} prodotto/i caricato/i`);
+        } else {
+          log('WARN', 'PRODUCTS_EMPTY', 'No products returned', {
+            hint: 'Verifica Product ID su App Store Connect'
+          });
+          setIAPError('NO_PRODUCTS', 'Nessun prodotto trovato. Verifica App Store Connect.', 'PRODUCTS');
+        }
+      } catch (fetchErr: any) {
+        if (fetchTimeoutRef.current) {
+          clearTimeout(fetchTimeoutRef.current);
+        }
+        log('ERROR', 'FETCH_ERROR', 'Fetch failed', { error: fetchErr.message });
+        setIAPError('FETCH_ERROR', fetchErr.message || 'Errore caricamento prodotti', 'FETCH');
+      }
+    };
+
+    initializeIAP();
+
+    return () => {
+      if (iapCleanup) iapCleanup();
+      if (iapModule?.endConnection) {
+        iapModule.endConnection().catch(() => {});
+      }
+    };
+  }, [iapModule]);
+
+  // Purchase subscription
   const purchaseSubscription = useCallback(async (productId: string): Promise<{ success: boolean; error?: string }> => {
-    if (!iapEnabled) {
-      return { success: false, error: 'IAP non disponibile' };
+    if (!iapFunctionsRef.current) {
+      return { success: false, error: 'IAP non inizializzato' };
     }
 
     if (!connected) {
       return { success: false, error: 'Store non connesso' };
-    }
-
-    if (!subscriptions || subscriptions.length === 0) {
-      return { success: false, error: 'Prodotti non caricati' };
     }
 
     setState('purchasing');
@@ -334,71 +316,55 @@ export function useSubscription(): UseSubscriptionResult {
     log('INFO', 'PURCHASE_START', 'Starting purchase', { productId });
 
     try {
-      // Find subscription for Android offer token
-      let offerToken: string | undefined;
-      if (Platform.OS === 'android') {
-        const subscription = subscriptions.find(s => s.id === productId);
-        if (subscription && 'subscriptionOfferDetailsAndroid' in subscription) {
-          const offers = (subscription as any).subscriptionOfferDetailsAndroid;
-          if (offers && offers.length > 0) {
-            offerToken = offers[0].offerToken;
-            log('DEBUG', 'ANDROID_OFFER', 'Found Android offer token', { offerToken });
-          }
+      const { requestSubscription, finishTransaction } = iapFunctionsRef.current;
+
+      // Find the subscription
+      const subscription = subscriptions.find(s => s.productId === productId);
+      
+      let purchaseParams: any = { sku: productId };
+      
+      // For Android, include offer token if available
+      if (Platform.OS === 'android' && subscription?.subscriptionOfferDetails) {
+        const offer = subscription.subscriptionOfferDetails[0];
+        if (offer?.offerToken) {
+          purchaseParams.subscriptionOffers = [{ sku: productId, offerToken: offer.offerToken }];
         }
       }
 
-      // Request purchase
-      const result = await requestPurchase({
-        type: 'subs',
-        request: {
-          apple: Platform.OS === 'ios' ? { sku: productId } : undefined,
-          google: Platform.OS === 'android' ? {
-            skus: [productId],
-            subscriptionOffers: offerToken ? [{ sku: productId, offerToken }] : undefined,
-          } : undefined,
-        },
-      });
+      const purchase = await requestSubscription(purchaseParams);
+      log('INFO', 'PURCHASE_RESULT', 'Purchase completed', { purchase });
 
-      log('INFO', 'PURCHASE_RESULT', 'Purchase request completed', { result });
+      if (purchase) {
+        // Validate with backend
+        const receipt = Platform.OS === 'ios' 
+          ? purchase.transactionReceipt 
+          : purchase.purchaseToken;
 
-      if (result) {
-        const purchase = Array.isArray(result) ? result[0] : result;
-        
-        if (purchase) {
-          // Validate with backend
-          log('INFO', 'VALIDATE_START', 'Validating purchase with backend');
+        const validation = await apiClient.validateIAPPurchase({
+          platform: Platform.OS as 'ios' | 'android',
+          product_id: productId,
+          transaction_id: purchase.transactionId || purchase.purchaseToken || '',
+          receipt: receipt || '',
+          plan_id: productId.includes('yearly') ? 'yearly' : 'monthly',
+        });
+
+        if (validation.success) {
+          log('INFO', 'VALIDATE_SUCCESS', 'Backend validation successful');
           
-          const receipt = Platform.OS === 'ios'
-            ? (purchase as any).transactionReceipt || (purchase as any).jws
-            : (purchase as any).purchaseToken;
-
-          const validation = await apiClient.validateIAPPurchase({
-            platform: Platform.OS as 'ios' | 'android',
-            product_id: purchase.productId || productId,
-            transaction_id: purchase.transactionId || (purchase as any).purchaseToken || purchase.id,
-            receipt: receipt || '',
-            plan_id: productId.includes('yearly') ? 'yearly' : 'monthly',
-          });
-
-          if (validation.success) {
-            log('INFO', 'VALIDATE_SUCCESS', 'Backend validation successful');
-            
-            // Finish transaction
-            try {
-              await finishTransaction({ purchase, isConsumable: false });
-              log('INFO', 'TRANSACTION_FINISHED', 'Transaction finished');
-            } catch (finishErr) {
-              log('WARN', 'FINISH_ERROR', 'Error finishing transaction', { error: finishErr });
-            }
-
-            setState('ready');
-            setDebugInfo('Abbonamento attivato!');
-            return { success: true };
-          } else {
-            log('ERROR', 'VALIDATE_FAILED', 'Backend validation failed', { validation });
-            setState('ready');
-            return { success: false, error: validation.message || 'Validazione fallita' };
+          // Finish transaction
+          try {
+            await finishTransaction({ purchase, isConsumable: false });
+            log('INFO', 'FINISH_SUCCESS', 'Transaction finished');
+          } catch (finishErr) {
+            log('WARN', 'FINISH_ERROR', 'Error finishing transaction', { error: finishErr });
           }
+
+          setState('ready');
+          setDebugInfo('Abbonamento attivato!');
+          return { success: true };
+        } else {
+          setState('ready');
+          return { success: false, error: validation.message || 'Validazione fallita' };
         }
       }
 
@@ -406,28 +372,25 @@ export function useSubscription(): UseSubscriptionResult {
       return { success: false, error: 'Acquisto non completato' };
 
     } catch (err: any) {
-      log('ERROR', 'PURCHASE_EXCEPTION', 'Purchase exception', { 
-        message: err.message,
-        code: err.code 
-      });
-
+      log('ERROR', 'PURCHASE_ERROR', 'Purchase exception', { error: err.message, code: err.code });
       setState('ready');
 
-      if (err.message?.toLowerCase().includes('cancel') || err.code === 'user-cancelled') {
+      if (err.code === 'E_USER_CANCELLED' || err.message?.toLowerCase().includes('cancel')) {
         return { success: false, error: 'cancelled' };
       }
 
-      if (err.code === 'already-owned') {
+      if (err.code === 'E_ALREADY_OWNED') {
         return { success: false, error: 'Hai già un abbonamento attivo' };
       }
 
       return { success: false, error: err.message || 'Errore durante l\'acquisto' };
     }
-  }, [iapEnabled, connected, subscriptions, requestPurchase, finishTransaction]);
+  }, [connected, subscriptions]);
 
+  // Restore purchases
   const restorePurchases = useCallback(async (): Promise<{ success: boolean; message?: string }> => {
-    if (!iapEnabled) {
-      return { success: false, message: 'IAP non disponibile' };
+    if (!iapFunctionsRef.current) {
+      return { success: false, message: 'IAP non inizializzato' };
     }
 
     if (!connected) {
@@ -436,30 +399,28 @@ export function useSubscription(): UseSubscriptionResult {
 
     setState('restoring');
     setDebugInfo('Ripristino acquisti...');
-    log('INFO', 'RESTORE_START', 'Starting restore purchases');
+    log('INFO', 'RESTORE_START', 'Starting restore');
 
     try {
-      await iapRestorePurchases();
+      const { getAvailablePurchases } = iapFunctionsRef.current;
+      const purchases = await getAvailablePurchases();
       
-      log('INFO', 'RESTORE_COMPLETE', 'Restore completed', {
-        availablePurchasesCount: availablePurchases?.length || 0
-      });
+      log('INFO', 'RESTORE_RESULT', 'Restore completed', { count: purchases?.length || 0 });
 
-      if (availablePurchases && availablePurchases.length > 0) {
-        const subscriptionPurchase = availablePurchases.find((p: Purchase) =>
-          p.productId?.includes('subscription') ||
-          ACTIVE_SUBSCRIPTION_SKUS.includes(p.productId || '')
+      if (purchases && purchases.length > 0) {
+        const subscriptionPurchase = purchases.find((p: any) => 
+          ACTIVE_SUBSCRIPTION_SKUS.includes(p.productId)
         );
 
         if (subscriptionPurchase) {
           const receipt = Platform.OS === 'ios'
-            ? (subscriptionPurchase as any).transactionReceipt || (subscriptionPurchase as any).jws
-            : (subscriptionPurchase as any).purchaseToken;
+            ? subscriptionPurchase.transactionReceipt
+            : subscriptionPurchase.purchaseToken;
 
           const validation = await apiClient.validateIAPPurchase({
             platform: Platform.OS as 'ios' | 'android',
-            product_id: subscriptionPurchase.productId || '',
-            transaction_id: subscriptionPurchase.transactionId || (subscriptionPurchase as any).purchaseToken || '',
+            product_id: subscriptionPurchase.productId,
+            transaction_id: subscriptionPurchase.transactionId || subscriptionPurchase.purchaseToken || '',
             receipt: receipt || '',
             plan_id: subscriptionPurchase.productId?.includes('yearly') ? 'yearly' : 'monthly',
           });
@@ -475,14 +436,13 @@ export function useSubscription(): UseSubscriptionResult {
       // Try backend restore
       try {
         const backendRestore = await apiClient.restoreIAPPurchases();
-        setState('ready');
-        
         if (backendRestore.success) {
+          setState('ready');
           setDebugInfo('Abbonamento ripristinato!');
           return { success: true, message: backendRestore.message };
         }
       } catch (backendErr) {
-        log('WARN', 'BACKEND_RESTORE_FAILED', 'Backend restore failed', { error: backendErr });
+        log('WARN', 'BACKEND_RESTORE_FAILED', 'Backend restore failed');
       }
 
       setState('ready');
@@ -490,71 +450,57 @@ export function useSubscription(): UseSubscriptionResult {
       return { success: false, message: 'Nessun abbonamento da ripristinare' };
 
     } catch (err: any) {
-      log('ERROR', 'RESTORE_ERROR', 'Restore error', { message: err.message });
+      log('ERROR', 'RESTORE_ERROR', 'Restore error', { error: err.message });
       setState('ready');
       return { success: false, message: err.message || 'Errore nel ripristino' };
     }
-  }, [iapEnabled, connected, iapRestorePurchases, availablePurchases]);
+  }, [connected]);
 
+  // Refresh products
   const refreshProducts = useCallback(async () => {
-    if (!iapEnabled || !connected) return;
+    if (!iapFunctionsRef.current || !connected) return;
 
-    log('INFO', 'REFRESH_START', 'Refreshing products');
+    log('INFO', 'REFRESH', 'Refreshing products');
     hasFetchedRef.current = false;
     setProductsFetched(false);
     setState('fetching');
     setDebugInfo('Ricaricamento prodotti...');
 
     try {
-      await fetchProducts({
-        skus: ACTIVE_SUBSCRIPTION_SKUS,
-        type: 'subs',
-      });
-      setProductsFetched(true);
+      const { getSubscriptions } = iapFunctionsRef.current;
+      const subs = await getSubscriptions({ skus: ACTIVE_SUBSCRIPTION_SKUS });
+      
+      if (subs && subs.length > 0) {
+        setSubscriptions(subs);
+        setProductsFetched(true);
+        setState('ready');
+        setError(null);
+        setDebugInfo(`${subs.length} prodotto/i caricato/i`);
+      } else {
+        setIAPError('NO_PRODUCTS', 'Nessun prodotto trovato', 'REFRESH');
+      }
     } catch (err: any) {
-      log('ERROR', 'REFRESH_ERROR', 'Refresh failed', { message: err.message });
       setIAPError('REFRESH_ERROR', err.message || 'Errore ricaricamento', 'REFRESH');
     }
-  }, [iapEnabled, connected, fetchProducts]);
+  }, [connected]);
 
+  // Retry connection
   const retryConnection = useCallback(() => {
     log('INFO', 'RETRY', 'Retrying connection');
-    retryCountRef.current++;
     hasFetchedRef.current = false;
     setProductsFetched(false);
-    setState('connecting');
+    setSubscriptions([]);
+    setConnected(false);
+    setState('initializing');
     setError(null);
     setDebugInfo('Riconnessione...');
     
-    if (reconnect) {
-      reconnect().catch((err) => {
-        log('ERROR', 'RECONNECT_ERROR', 'Reconnect failed', { error: err });
-      });
-    }
-  }, [reconnect]);
-
-  // ========================================
-  // RETURN VALUES
-  // ========================================
-
-  // Web platform fallback
-  if (!iapEnabled) {
-    return {
-      state: 'unavailable',
-      isConnected: false,
-      isLoading: false,
-      isPurchasing: false,
-      isRestoring: false,
-      isReady: false,
-      products: [],
-      error: null,
-      debugInfo: 'IAP non disponibile (web)',
-      purchaseSubscription: async () => ({ success: false, error: 'Use Stripe on web' }),
-      restorePurchases: async () => ({ success: false, message: 'Not available on web' }),
-      refreshProducts: async () => {},
-      retryConnection: () => {},
-    };
-  }
+    // Force reload module
+    setIapModule(null);
+    setTimeout(() => {
+      import('expo-iap').then(mod => setIapModule(mod)).catch(() => {});
+    }, 100);
+  }, []);
 
   return {
     state,
@@ -563,7 +509,7 @@ export function useSubscription(): UseSubscriptionResult {
     isPurchasing: state === 'purchasing',
     isRestoring: state === 'restoring',
     isReady: state === 'ready' && subscriptions.length > 0,
-    products: subscriptions || [],
+    products: subscriptions,
     error,
     debugInfo,
     purchaseSubscription,
@@ -571,4 +517,18 @@ export function useSubscription(): UseSubscriptionResult {
     refreshProducts,
     retryConnection,
   };
+}
+
+// ============================================================================
+// MAIN EXPORT - Chooses web or native implementation
+// ============================================================================
+
+export function useSubscription(): UseSubscriptionResult {
+  // On web, return fallback immediately without loading expo-iap
+  if (Platform.OS === 'web') {
+    return useSubscriptionWeb();
+  }
+  
+  // On native platforms, use the full IAP implementation
+  return useSubscriptionNative();
 }
