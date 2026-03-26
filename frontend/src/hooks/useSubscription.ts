@@ -97,13 +97,21 @@ function isExpoGo(): boolean {
 }
 
 // Check if the native IAP module is actually available
+// IMPORTANT: expo-iap uses Expo Modules Architecture, NOT traditional NativeModules
+// We must use requireOptionalNativeModule from 'expo-modules-core' to check availability
 function isNativeIAPModuleAvailable(): boolean {
   try {
-    // Try to access the native module directly
-    const { NativeModules } = require('react-native');
-    // expo-iap uses 'ExpoIap' as the native module name
-    return !!NativeModules.ExpoIap;
-  } catch {
+    // For Expo Modules (like expo-iap), we need to use requireOptionalNativeModule
+    // NOT NativeModules which is for legacy React Native modules
+    // requireOptionalNativeModule returns null if module not found (doesn't throw)
+    const { requireOptionalNativeModule } = require('expo-modules-core');
+    const ExpoIapModule = requireOptionalNativeModule('ExpoIap');
+    const available = ExpoIapModule !== null && ExpoIapModule !== undefined;
+    console.log('[IAP] Native module check result:', available);
+    return available;
+  } catch (error: any) {
+    // Module not available - this is expected in Expo Go or if build doesn't include it
+    console.log('[IAP] Native module check failed:', error?.message || error);
     return false;
   }
 }
