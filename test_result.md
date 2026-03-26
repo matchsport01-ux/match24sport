@@ -325,7 +325,7 @@ frontend:
     implemented: true
     working: false
     file: "/app/frontend/app/index.tsx"
-    stuck_count: 4
+    stuck_count: 5
     priority: "high"
     needs_retesting: false
     status_history:
@@ -353,6 +353,9 @@ frontend:
       - working: false
         agent: "testing"
         comment: "CRITICAL PRODUCTION TESTING BLOCKED: 4th occurrence of loading screen issue confirmed. App completely stuck on 'Caricamento...' screen on iPhone 14 dimensions (390x844). Persists after 13+ seconds, even with direct navigation to /auth/login. ALL comprehensive frontend testing blocked. This is a fundamental AuthContext architectural issue requiring WEBSEARCH tool research for permanent fix."
+      - working: false
+        agent: "testing"
+        comment: "CRITICAL PRODUCTION TESTING BLOCKED: 5TH OCCURRENCE of loading screen issue confirmed. App completely stuck on 'Caricamento...' screen on iPhone 14 dimensions (390x844). Persists indefinitely - tested for 15+ seconds with no resolution. ALL comprehensive frontend testing (Club Admin Flow, Player Flow, Authentication, Error Handling, IAP Subscription, Mobile Responsiveness) COMPLETELY BLOCKED. This is a fundamental AuthContext architectural issue requiring IMMEDIATE WEBSEARCH tool research and complete redesign of authentication initialization."
 
   - task: "Login Screen"
     implemented: true
@@ -542,14 +545,15 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Landing Page - CRITICAL loading screen issue blocking all testing"
+    - "Landing Page - CRITICAL loading screen issue blocking ALL testing (5th occurrence)"
     - "Login Screen - Cannot access due to loading screen"
-    - "AuthContext architectural fix required"
+    - "AuthContext architectural fix required - WEBSEARCH needed"
   stuck_tasks:
-    - "Landing Page - 4th occurrence of loading screen issue"
+    - "Landing Page - 5th occurrence of loading screen issue - ARCHITECTURAL REDESIGN REQUIRED"
     - "Login Screen - Authentication blocked by loading screen"
+    - "Club Dashboard Error - Authentication integration broken"
   test_all: false
-  test_priority: "critical_first"
+  test_priority: "critical_blocker_first"
 
   - task: "Club Pending Results API"
     implemented: true
@@ -608,6 +612,39 @@ agent_communication:
       - Court Management: ✓
       - Match Creation/Join: ✓
       Screenshots verified landing, login, register, and search pages render correctly.
+  - agent: "testing"
+    message: |
+      CRITICAL PRODUCTION TESTING BLOCKED - LOADING SCREEN ISSUE CONFIRMED (5TH OCCURRENCE)
+      
+      🚨 CRITICAL FINDINGS:
+      - App completely stuck on "Caricamento..." loading screen on iPhone 14 dimensions (390x844)
+      - This is the SAME recurring issue reported 4 times previously in test history
+      - ALL comprehensive frontend testing is COMPLETELY BLOCKED by this critical issue
+      - Issue persists indefinitely - tested for 15+ seconds with no resolution
+      - Even direct navigation to specific routes shows the loading screen
+      
+      📱 ATTEMPTED COMPREHENSIVE TESTING (ALL BLOCKED):
+      ❌ TEST 1: Club Admin Flow (login, dashboard, subscription, edit profile) - BLOCKED
+      ❌ TEST 2: Player Flow (login, home, search, edit profile) - BLOCKED  
+      ❌ TEST 3: Authentication Flow - BLOCKED
+      ❌ TEST 4: Error Handling (404 page) - BLOCKED
+      ❌ TEST 5: IAP Subscription Flow - BLOCKED
+      ❌ TEST 6: Mobile Responsiveness - BLOCKED
+      
+      🔍 ROOT CAUSE ANALYSIS:
+      This is the 5th occurrence of this exact issue in test history. Previous "fixes" were temporary patches that didn't address the fundamental problem.
+      The AuthContext async operations are hanging on web platform, causing infinite loading state.
+      Looking at /app/frontend/src/contexts/AuthContext.tsx, the 3-second timeout mechanism exists but is not working.
+      
+      🏆 URGENT RECOMMENDATION FOR MAIN AGENT:
+      This requires IMMEDIATE ARCHITECTURAL FIX using WEBSEARCH tool to research:
+      1. React Native/Expo AuthContext best practices for web platform compatibility
+      2. Proper async initialization patterns that don't hang on web
+      3. Alternative authentication initialization approaches
+      4. Comprehensive timeout and fallback mechanisms that actually work
+      5. Web-specific AuthContext implementation patterns
+      
+      STATUS: ALL FRONTEND TESTING COMPLETELY BLOCKED - REQUIRES IMMEDIATE WEBSEARCH AND ARCHITECTURAL REDESIGN
   - agent: "testing"
     message: |
       IAP SUBSCRIPTION ENDPOINTS TESTING COMPLETED - 100% SUCCESS RATE (4/4 TESTS PASSED)
@@ -1347,7 +1384,61 @@ agent_communication:
         agent: "testing"
         comment: "COMPLETE END-TO-END IAP SUBSCRIPTION TESTING COMPLETED - 100% SUCCESS RATE (11/11 tests passed). 🎯 PRODUCTION READINESS VERIFIED: ✅ Authentication Flow: POST /api/auth/login, GET /api/auth/me, GET /api/club/my all working correctly with club credentials (newclubtest6051@test.com/TestPass123!). ✅ IAP Validation Endpoints: iOS Monthly (com.matchsport24.subscription.monthly), iOS Yearly (com.matchsport24.subscription.yearly), Android Monthly all return 200 with success=true and proper subscription activation. ✅ Duplicate Transaction Prevention: Same transaction_id correctly detected with already_processed=true. ✅ Invalid Platform Validation: Windows platform correctly rejected with 400 Bad Request. ✅ Missing Fields Validation: Incomplete requests correctly rejected with 422 validation error. ✅ IAP Restore: POST /api/subscription/iap/restore returns current subscription status correctly. ✅ IAP Status: GET /api/subscription/iap/status returns all required fields (subscription_status, subscription_expires_at, is_active). ✅ Club Subscription Status: GET /api/club/my includes subscription fields. ✅ Edge Cases: Expired tokens rejected (401), player users rejected for IAP (400). ✅ Verification Checklist: Response codes correct, body structures correct, database updates working, Italian error messages, no sensitive data exposed. FIXED MINOR BUG: Added platform validation to reject unsupported platforms. ALL IAP SUBSCRIPTION ENDPOINTS ARE PRODUCTION READY FOR APPLE APP STORE SUBMISSION."
 
+frontend:
+  - task: "Club Subscription Page (IAP)"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/club/subscription.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "TestFlight build shows 'undefined is not a function' error when attempting subscription purchase."
+      - working: false
+        agent: "user"
+        comment: "TestFlight build shows 'Caricamento prodotti...' infinite loop, products never load from App Store."
+      - working: true
+        agent: "main"
+        comment: "ROOT CAUSE IDENTIFIED AND FIXED: 1) expo-iap was NOT in app.json plugins - native module not compiled. 2) deploymentTarget was insufficient - expo-iap requires iOS 15.1+. 3) useSubscription.ts rewrote with dynamic import to avoid web crash. FIXES APPLIED: Added 'expo-iap' to plugins, added expo-build-properties with deploymentTarget=15.1, buildNumber incremented to 2. Web fallback now works correctly showing Stripe option."
+
+  - task: "useSubscription Hook"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/hooks/useSubscription.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Completely rewritten with: dynamic expo-iap import (only on native), comprehensive logging [IAP][LEVEL][STEP], timeout handling (15s fetch, 10s connection), explicit state machine (initializing→connecting→fetching→ready/error), web fallback returns safe mock state without crash."
+
 agent_communication:
+  - agent: "main"
+    message: |
+      IAP FRONTEND FIX APPLIED - REQUIRES NATIVE BUILD TESTING
+      
+      ROOT CAUSE OF "Caricamento prodotti..." INFINITE LOOP:
+      1. expo-iap was NOT in app.json plugins - native StoreKit module was never compiled into the iOS build
+      2. deploymentTarget was 15.0 but expo-iap requires 15.1+
+      3. Previous code tried to import expo-iap on web causing crash
+      
+      FIXES APPLIED:
+      - app.json: Added "expo-iap" to plugins, expo-build-properties with deploymentTarget="15.1"
+      - useSubscription.ts: Dynamic import of expo-iap only on native platforms
+      - subscription.tsx: Updated to show debug info and handle all IAP states
+      - buildNumber incremented to "2" for new TestFlight build
+      
+      TESTING REQUEST:
+      1. Test Club Subscription page on web - verify no crash, Stripe option shown
+      2. Test complete club flow: login → dashboard → subscription
+      3. Test player flow: login → search → matches
+      4. Verify Delete Account feature in Edit Profile is accessible
+      
+      NOTE: Native IAP purchase flow cannot be tested here - requires TestFlight build on real iOS device
+
   - agent: "testing"
     message: |
       COMPLETE END-TO-END IAP SUBSCRIPTION TESTING COMPLETED - 100% SUCCESS RATE (11/11 TESTS PASSED)
