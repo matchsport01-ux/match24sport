@@ -38,8 +38,8 @@ export default function ClubSubscriptionScreen() {
   const [promoValue, setPromoValue] = useState(0);
   const [isValidatingPromo, setIsValidatingPromo] = useState(false);
   
-  // Debug mode - show detailed IAP status
-  const [showDebug, setShowDebug] = useState(__DEV__ || true); // Always show for now
+  // Debug mode - show detailed IAP status only in development
+  const [showDebug, setShowDebug] = useState(__DEV__);
 
   // Use the subscription hook
   const {

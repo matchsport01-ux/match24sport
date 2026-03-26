@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.matchsport24.app",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "infoPlist": {
         "NSCameraUsageDescription": "Per scattare foto del tuo profilo",
         "NSPhotoLibraryUsageDescription": "Per scegliere foto dalla galleria",
@@ -87,7 +87,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "764426cd-23ab-4cb4-9f6b-c8dbf743dc9e"
+        "projectId": "001160bc-cc77-47f7-99d8-40bc720c9ded"
       },
       "backendUrl": "https://padel-finder-app.preview.emergentagent.com"
     },

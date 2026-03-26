@@ -1383,6 +1383,9 @@ agent_communication:
       - working: true
         agent: "testing"
         comment: "COMPLETE END-TO-END IAP SUBSCRIPTION TESTING COMPLETED - 100% SUCCESS RATE (11/11 tests passed). 🎯 PRODUCTION READINESS VERIFIED: ✅ Authentication Flow: POST /api/auth/login, GET /api/auth/me, GET /api/club/my all working correctly with club credentials (newclubtest6051@test.com/TestPass123!). ✅ IAP Validation Endpoints: iOS Monthly (com.matchsport24.subscription.monthly), iOS Yearly (com.matchsport24.subscription.yearly), Android Monthly all return 200 with success=true and proper subscription activation. ✅ Duplicate Transaction Prevention: Same transaction_id correctly detected with already_processed=true. ✅ Invalid Platform Validation: Windows platform correctly rejected with 400 Bad Request. ✅ Missing Fields Validation: Incomplete requests correctly rejected with 422 validation error. ✅ IAP Restore: POST /api/subscription/iap/restore returns current subscription status correctly. ✅ IAP Status: GET /api/subscription/iap/status returns all required fields (subscription_status, subscription_expires_at, is_active). ✅ Club Subscription Status: GET /api/club/my includes subscription fields. ✅ Edge Cases: Expired tokens rejected (401), player users rejected for IAP (400). ✅ Verification Checklist: Response codes correct, body structures correct, database updates working, Italian error messages, no sensitive data exposed. FIXED MINOR BUG: Added platform validation to reject unsupported platforms. ALL IAP SUBSCRIPTION ENDPOINTS ARE PRODUCTION READY FOR APPLE APP STORE SUBMISSION."
+      - working: true
+        agent: "testing"
+        comment: "IAP BACKEND PRODUCTION READINESS TEST COMPLETED - 100% SUCCESS RATE (10/10 TESTS PASSED). 🎯 REVIEW REQUEST VERIFICATION: ✅ IAP Validate iOS - POST /api/subscription/iap/validate with monthly SKU returns 200, success=true, subscription_status='active', expires_at='2026-04-25', proper Italian message 'Abbonamento attivato con successo!'. ✅ IAP Validate Android - Same endpoint with platform='android' returns 200 with proper activation and subscription duration. ✅ IAP Restore - POST /api/subscription/iap/restore returns 200 with Italian message 'Abbonamento ripristinato con successo!' for users with active subscription. ✅ IAP Status - GET /api/subscription/iap/status returns 200 with all required fields: subscription_status, subscription_plan, subscription_expires_at, subscription_source, is_active. ✅ Club Status After Purchase - GET /api/club/my correctly shows subscription_status='active' and subscription_expires_at fields after IAP purchase. ✅ Duplicate Transaction Prevention - Same transaction_id correctly detected with already_processed=true, proper idempotency. ✅ Invalid Platform Rejection - Windows platform correctly rejected with 400 'Piattaforma non supportata'. ✅ Missing Fields Rejection - Incomplete requests correctly rejected with 422 validation error. ✅ Player Access Restriction - Player accounts correctly rejected with 400 'Solo i circoli possono sottoscrivere abbonamenti'. ✅ Monthly Subscription Duration - Monthly plan correctly sets ~30 days duration (29 days verified). Backend logs show proper IAP operations with Italian localization. All endpoints returning correct HTTP status codes with valid JSON responses. PRODUCTION READY FOR MATCH SPORT 24 RELEASE."
 
 frontend:
   - task: "Club Subscription Page (IAP)"
@@ -1493,3 +1496,56 @@ agent_communication:
       ALL IAP SUBSCRIPTION ENDPOINTS ARE FULLY FUNCTIONAL AND READY FOR APPLE APP STORE SUBMISSION.
       Complete end-to-end workflow verified with 100% success rate across all critical scenarios.
       Authentication, validation, error handling, Italian localization, and security controls all working correctly.
+  - agent: "testing"
+    message: |
+      IAP BACKEND PRODUCTION READINESS TEST COMPLETED - 100% SUCCESS RATE (10/10 TESTS PASSED)
+      
+      🎯 REVIEW REQUEST VERIFICATION - ALL REQUIREMENTS MET:
+      
+      ✅ 1. IAP Validate iOS - POST /api/subscription/iap/validate
+      - Valid purchase with monthly SKU: Returns 200, success=true, subscription_status='active'
+      - Subscription expires correctly: 2026-04-25 (~30 days from activation)
+      - Italian success message: "Abbonamento attivato con successo!"
+      - Proper subscription duration: Monthly = 1 month (29-30 days verified)
+      
+      ✅ 2. IAP Validate Android - POST /api/subscription/iap/validate  
+      - Valid purchase with Android parameters: Returns 200 with proper activation
+      - Same endpoint handles both iOS and Android platforms correctly
+      - Platform-specific logging and transaction recording working
+      
+      ✅ 3. IAP Restore - POST /api/subscription/iap/restore
+      - Restore for user with active subscription: Returns 200 with Italian message
+      - Response: "Abbonamento ripristinato con successo!"
+      - Restore for user without subscription: Returns proper status message
+      
+      ✅ 4. IAP Status - GET /api/subscription/iap/status
+      - Returns current subscription status with all required fields
+      - Fields: subscription_status, subscription_plan, subscription_expires_at, subscription_source, is_active
+      - Proper JSON structure and data types
+      
+      ✅ 5. Club Status After Purchase - GET /api/club/my
+      - Subscription_status field updates correctly to 'active' after purchase
+      - Subscription_expires_at field properly set with expiration date
+      - All subscription fields integrated with club profile data
+      
+      ✅ EDGE CASES - ALL HANDLED CORRECTLY:
+      - Duplicate transaction prevention: Same transaction_id correctly detected with already_processed=true
+      - Invalid platform rejection: Windows platform rejected with 400 "Piattaforma non supportata"
+      - Missing fields rejection: Incomplete requests rejected with 422 validation error
+      - Player access restriction: Player accounts rejected with 400 "Solo i circoli possono sottoscrivere abbonamenti"
+      - Italian error messages: All error responses properly localized
+      - Idempotency: Duplicate transactions handled without side effects
+      
+      🔧 BACKEND LOGS VERIFICATION:
+      - All IAP operations properly logged: '[IAP] Validating purchase', '[IAP] Subscription activated'
+      - Duplicate transaction detection: '[IAP] Duplicate transaction: test_duplicate_xxx'
+      - Subscription activation logged with proper expiration dates
+      - Italian localization working throughout all responses
+      
+      🏆 PRODUCTION READINESS CONFIRMED:
+      Base URL: https://padel-finder-app.preview.emergentagent.com/api
+      Test Credentials: newclubtest6051@test.com / TestPass123!
+      All endpoints returning correct HTTP status codes (200, 400, 401, 422) with valid JSON responses.
+      Complete IAP workflow verified for Match Sport 24 production release.
+      
+      STATUS: ALL IAP ENDPOINTS FULLY FUNCTIONAL AND PRODUCTION-READY FOR APPLE APP STORE
