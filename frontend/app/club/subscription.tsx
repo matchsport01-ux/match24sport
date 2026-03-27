@@ -234,9 +234,11 @@ export default function ClubSubscriptionScreen() {
   const handleStripeCheckout = async () => {
     setIsProcessing(true);
     try {
+      // Use environment variable for production URL, fallback for development
+      const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://padel-finder-app.preview.emergentagent.com';
       const originUrl = Platform.OS === 'web'
         ? window.location.origin
-        : 'https://padel-finder-app.preview.emergentagent.com';
+        : backendUrl;
 
       const result = await apiClient.createSubscriptionCheckout(selectedPlan, originUrl);
 
