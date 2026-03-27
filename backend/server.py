@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -2886,6 +2886,82 @@ async def leave_match_chat(sid, data):
     if match_id:
         await sio.leave_room(sid, f"chat_{match_id}")
         logger.info(f"Client {sid} left chat room: chat_{match_id}")
+
+# ======================= LEGAL PAGES (Apple App Store Compliance) =======================
+
+@api_router.get("/privacy", response_class=HTMLResponse)
+async def privacy_policy():
+    """Privacy Policy page - Required for Apple App Store"""
+    return """
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - Match Sport 24</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #0F172A; color: #F8FAFC; }
+        h1 { color: #10B981; }
+        h2 { color: #10B981; margin-top: 30px; }
+        p, li { line-height: 1.6; color: #CBD5E1; }
+        .updated { color: #64748B; font-style: italic; }
+    </style>
+</head>
+<body>
+    <h1>Privacy Policy</h1>
+    <p class="updated">Ultimo aggiornamento: Marzo 2026</p>
+    
+    <h2>1. Informazioni Raccolte</h2>
+    <p>Match Sport 24 raccoglie le seguenti informazioni:</p>
+    <ul>
+        <li>Email e nome per la creazione dell'account</li>
+        <li>Foto del profilo (opzionale)</li>
+        <li>Informazioni sul circolo sportivo per i gestori</li>
+        <li>Dati di utilizzo dell'app per migliorare il servizio</li>
+    </ul>
+    
+    <h2>2. Utilizzo delle Informazioni</h2>
+    <p>Utilizziamo le informazioni raccolte per:</p>
+    <ul>
+        <li>Fornire e migliorare i nostri servizi</li>
+        <li>Gestire il tuo account e abbonamento</li>
+        <li>Comunicare aggiornamenti importanti</li>
+        <li>Garantire la sicurezza della piattaforma</li>
+    </ul>
+    
+    <h2>3. Condivisione dei Dati</h2>
+    <p>Non vendiamo i tuoi dati personali. Condividiamo informazioni solo:</p>
+    <ul>
+        <li>Con fornitori di servizi necessari (pagamenti, hosting)</li>
+        <li>Quando richiesto dalla legge</li>
+        <li>Con il tuo consenso esplicito</li>
+    </ul>
+    
+    <h2>4. Sicurezza</h2>
+    <p>Implementiamo misure di sicurezza tecniche e organizzative per proteggere i tuoi dati, inclusa la crittografia delle comunicazioni e l'accesso limitato ai dati personali.</p>
+    
+    <h2>5. I Tuoi Diritti</h2>
+    <p>Hai il diritto di:</p>
+    <ul>
+        <li>Accedere ai tuoi dati personali</li>
+        <li>Correggere dati inesatti</li>
+        <li>Richiedere la cancellazione del tuo account</li>
+        <li>Esportare i tuoi dati</li>
+    </ul>
+    
+    <h2>6. Cancellazione Account</h2>
+    <p>Puoi richiedere la cancellazione del tuo account in qualsiasi momento attraverso le Impostazioni dell'app. Tutti i tuoi dati verranno eliminati entro 30 giorni dalla richiesta, salvo obblighi legali di conservazione.</p>
+    
+    <h2>7. Abbonamenti</h2>
+    <p>Gli abbonamenti sono gestiti tramite App Store (iOS) o Google Play (Android). I pagamenti vengono processati direttamente da Apple o Google. L'abbonamento si rinnova automaticamente a meno che non venga annullato almeno 24 ore prima della fine del periodo corrente.</p>
+    
+    <h2>8. Contatti</h2>
+    <p>Per domande sulla privacy, contattaci a: support@matchsport24.com</p>
+    
+    <p style="margin-top: 50px; text-align: center; color: #64748B;">© 2026 Match Sport 24. Tutti i diritti riservati.</p>
+</body>
+</html>
+"""
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

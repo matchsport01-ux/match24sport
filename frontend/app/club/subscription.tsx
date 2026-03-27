@@ -1,5 +1,6 @@
-// Club Subscription Screen - Uses native IAP with comprehensive state management
-import React, { useEffect, useState } from 'react';
+// Club Subscription Screen - Apple App Store Compliant
+// Handles native IAP with comprehensive state management, iPad support, and legal compliance
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +11,8 @@ import {
   Platform,
   Linking,
   TextInput,
+  Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,9 +25,20 @@ import { format, parseISO } from 'date-fns';
 import { useSubscription, shouldUseNativeIAP, PRODUCT_IDS, ACTIVE_SUBSCRIPTION_SKUS } from '../../src/hooks/useSubscription';
 import { successHaptic, errorHaptic } from '../../src/utils/haptics';
 
+// Legal URLs - REQUIRED for Apple compliance
+const LEGAL_URLS = {
+  PRIVACY_POLICY: 'https://padel-finder-app.emergent.host/privacy',
+  TERMS_OF_USE: 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/',
+};
+
+// Get responsive dimensions for iPad support
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const isTablet = SCREEN_WIDTH >= 768;
+
 export default function ClubSubscriptionScreen() {
   const router = useRouter();
-  const { session_id } = useLocalSearchParams<{ session_id?: string }>();
+  const params = useLocalSearchParams();
+  const session_id = String(params.session_id || '');
   const { t } = useLanguage();
 
   const [club, setClub] = useState<any>(null);
@@ -37,11 +51,12 @@ export default function ClubSubscriptionScreen() {
   const [promoType, setPromoType] = useState<'percentage' | 'trial_months' | null>(null);
   const [promoValue, setPromoValue] = useState(0);
   const [isValidatingPromo, setIsValidatingPromo] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   
-  // Debug mode - show detailed IAP status only in development
+  // Debug mode - only in development
   const [showDebug, setShowDebug] = useState(__DEV__);
 
-  // Use the subscription hook
+  // Use the subscription hook with comprehensive error handling
   const {
     state: iapState,
     isConnected: iapConnected,
@@ -58,37 +73,34 @@ export default function ClubSubscriptionScreen() {
     retryConnection,
   } = useSubscription();
 
-  // Show only monthly plan for now
-  const showYearlyPlan = false;
-
+  // Plan configuration - Price MUST match App Store Connect (49.99 USD)
   const plans = {
     monthly: {
-      name: t('monthly'),
+      name: 'Mensile',
       price: 49.99,
-      period: t('per_month'),
+      currency: 'USD',
+      period: '/mese',
+      periodDescription: '1 mese',
       productId: PRODUCT_IDS.MONTHLY,
     },
-    ...(showYearlyPlan ? {
-      yearly: {
-        name: t('yearly'),
-        price: 399.99,
-        period: t('per_year'),
-        savings: '33%',
-        productId: PRODUCT_IDS.YEARLY,
-      },
-    } : {}),
   };
 
-  // Get price from store products
-  const getStorePrice = (productId: string): string | null => {
-    if (!iapProducts || iapProducts.length === 0) return null;
-    const product = iapProducts.find((p: any) => p.id === productId || p.productId === productId);
-    if (product) {
-      return (product as any).displayPrice || (product as any).localizedPrice || (product as any).price;
+  // Get price from store products with fallback
+  const getStorePrice = useCallback((productId: string): string => {
+    if (iapProducts && iapProducts.length > 0) {
+      const product = iapProducts.find((p: any) => 
+        p.id === productId || p.productId === productId
+      );
+      if (product) {
+        return (product as any).displayPrice || 
+               (product as any).localizedPrice || 
+               `$${plans.monthly.price.toFixed(2)}`;
+      }
     }
-    return null;
-  };
+    return `$${plans.monthly.price.toFixed(2)}`;
+  }, [iapProducts]);
 
+  // Validate promo code
   const validatePromoCode = async () => {
     if (!promoCode.trim()) {
       Alert.alert('Errore', 'Inserisci un codice promozionale');
@@ -127,17 +139,19 @@ export default function ClubSubscriptionScreen() {
     return originalPrice * (1 - promoDiscount / 100);
   };
 
+  // Fetch club data
   const fetchClub = async () => {
     try {
       const data = await apiClient.getMyClub();
       setClub(data);
     } catch (error) {
-      console.error('Error fetching club:', error);
+      // Silent fail - club data is optional for subscription view
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Check Stripe payment status (web only)
   const checkPaymentStatus = async (sessionId: string) => {
     setIsProcessing(true);
     let attempts = 0;
@@ -148,7 +162,7 @@ export default function ClubSubscriptionScreen() {
       try {
         const status = await apiClient.getSubscriptionStatus(sessionId);
         if (status.payment_status === 'paid') {
-          Alert.alert(t('success'), 'Abbonamento attivato con successo!');
+          Alert.alert('Successo', 'Abbonamento attivato con successo!');
           await fetchClub();
           setIsProcessing(false);
           if (Platform.OS === 'web') {
@@ -185,7 +199,18 @@ export default function ClubSubscriptionScreen() {
     }
   }, [session_id]);
 
-  // Handle IAP purchase
+  // Auto-retry for IAP connection issues (max 3 times)
+  useEffect(() => {
+    if (iapState === 'error' && retryCount < 3 && shouldUseNativeIAP()) {
+      const timer = setTimeout(() => {
+        setRetryCount(prev => prev + 1);
+        retryConnection();
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [iapState, retryCount]);
+
+  // Handle native IAP purchase
   const handleIAPPurchase = async () => {
     const plan = plans[selectedPlan];
     if (!plan?.productId) {
@@ -195,8 +220,6 @@ export default function ClubSubscriptionScreen() {
 
     setIsProcessing(true);
     try {
-      console.log('[Subscription] Starting native IAP purchase for:', selectedPlan, plan.productId);
-
       const result = await purchaseSubscription(plan.productId);
 
       if (result.error === 'cancelled') {
@@ -215,15 +238,14 @@ export default function ClubSubscriptionScreen() {
       Alert.alert('Successo!', 'Abbonamento attivato con successo!');
       await fetchClub();
     } catch (error: any) {
-      console.error('[Subscription] IAP error:', error);
       errorHaptic();
-      Alert.alert('Errore', error.message || 'Errore durante l\'acquisto');
+      Alert.alert('Errore', error.message || "Errore durante l'acquisto");
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Handle Stripe checkout for web
+  // Handle Stripe checkout (web)
   const handleStripeCheckout = async () => {
     setIsProcessing(true);
     try {
@@ -260,11 +282,11 @@ export default function ClubSubscriptionScreen() {
         Alert.alert('Info', result.message || 'Nessun abbonamento da ripristinare');
       }
     } catch (error: any) {
-      console.error('[Subscription] Restore error:', error);
       Alert.alert('Errore', 'Impossibile ripristinare gli acquisti');
     }
   };
 
+  // Main subscribe handler
   const handleSubscribe = async () => {
     if (promoApplied && promoType === 'trial_months') {
       setIsProcessing(true);
@@ -290,6 +312,11 @@ export default function ClubSubscriptionScreen() {
     }
   };
 
+  // Open legal URLs
+  const openPrivacyPolicy = () => Linking.openURL(LEGAL_URLS.PRIVACY_POLICY);
+  const openTermsOfUse = () => Linking.openURL(LEGAL_URLS.TERMS_OF_USE);
+
+  // Status helpers
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active': return COLORS.success;
@@ -301,8 +328,8 @@ export default function ClubSubscriptionScreen() {
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'active': return t('subscription_active');
-      case 'trial': return t('trial');
+      case 'active': return 'Attivo';
+      case 'trial': return 'Prova';
       case 'expired': return 'Scaduto';
       default: return status;
     }
@@ -315,115 +342,107 @@ export default function ClubSubscriptionScreen() {
     return 'Stripe';
   };
 
-  // Get state-specific icon and color
-  const getStateIcon = (): { name: keyof typeof Ionicons.glyphMap; color: string } => {
-    switch (iapState) {
-      case 'initializing':
-      case 'connecting':
-        return { name: 'hourglass-outline', color: COLORS.warning };
-      case 'connected':
-      case 'fetching':
-        return { name: 'cloud-download-outline', color: COLORS.warning };
-      case 'ready':
-        return { name: 'checkmark-circle', color: COLORS.success };
-      case 'purchasing':
-      case 'restoring':
-        return { name: 'sync-outline', color: COLORS.accent };
-      case 'error':
-        return { name: 'alert-circle', color: COLORS.error };
-      case 'unavailable':
-        return { name: 'close-circle', color: COLORS.textMuted };
-      default:
-        return { name: 'help-circle', color: COLORS.textMuted };
+  // Determine button state
+  const isIAPMode = shouldUseNativeIAP();
+  const isIAPLoading = isIAPMode && (iapState === 'initializing' || iapState === 'connecting' || iapState === 'fetching');
+  const isIAPError = isIAPMode && iapState === 'error';
+  const hasProducts = !isIAPMode || (iapProducts && iapProducts.length > 0);
+  
+  const canSubscribe = isIAPMode
+    ? (iapReady && hasProducts && !isPurchasing && !isProcessing)
+    : !isProcessing;
+
+  // Render loading state
+  if (isLoading) {
+    return <LoadingSpinner fullScreen message="Caricamento..." />;
+  }
+
+  // Render IAP loading/error state - Apple compliant UI
+  const renderIAPState = () => {
+    if (!isIAPMode) return null;
+
+    // Loading state
+    if (isIAPLoading) {
+      return (
+        <Card style={styles.stateCard}>
+          <View style={styles.stateContent}>
+            <ActivityIndicator size="small" color={COLORS.accent} />
+            <Text style={styles.stateText}>Connessione allo store in corso...</Text>
+          </View>
+        </Card>
+      );
     }
-  };
 
-  // Render IAP status banner with detailed info
-  const renderIAPStatus = () => {
-    if (!shouldUseNativeIAP()) return null;
-
-    const stateIcon = getStateIcon();
-    const showRetry = iapState === 'error';
-    const showRefresh = iapState === 'ready' && iapProducts.length === 0;
-
-    return (
-      <TouchableOpacity
-        style={[
-          styles.iapStatusBanner,
-          iapState === 'error' && styles.iapStatusBannerError,
-          iapState === 'ready' && iapProducts.length > 0 && styles.iapStatusBannerSuccess,
-        ]}
-        onPress={() => setShowDebug(!showDebug)}
-        onLongPress={showRetry ? retryConnection : (showRefresh ? refreshProducts : undefined)}
-      >
-        <Ionicons name={stateIcon.name} size={18} color={stateIcon.color} />
-        <View style={styles.iapStatusTextContainer}>
-          <Text style={[styles.iapStatusText, { color: stateIcon.color }]}>
-            {debugInfo}
-          </Text>
-          {showDebug && (
-            <Text style={styles.iapDebugText}>
-              Stato: {iapState} | Connesso: {iapConnected ? 'Sì' : 'No'} | Prodotti: {iapProducts.length}
-            </Text>
-          )}
-          {iapError && showDebug && (
-            <Text style={styles.iapErrorText}>
-              Errore [{iapError.code}]: {iapError.message}
-            </Text>
-          )}
-        </View>
-        {(showRetry || showRefresh) && (
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={showRetry ? retryConnection : refreshProducts}
+    // Error state with retry
+    if (isIAPError) {
+      return (
+        <Card style={[styles.stateCard, styles.errorCard]}>
+          <View style={styles.stateContent}>
+            <Ionicons name="alert-circle" size={24} color={COLORS.error} />
+            <View style={styles.stateTextContainer}>
+              <Text style={styles.errorTitle}>Impossibile caricare i prodotti</Text>
+              <Text style={styles.errorMessage}>
+                Verifica la connessione internet e riprova
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity 
+            style={styles.retryButton} 
+            onPress={() => {
+              setRetryCount(0);
+              retryConnection();
+            }}
           >
             <Ionicons name="refresh" size={20} color={COLORS.accent} />
+            <Text style={styles.retryText}>Riprova</Text>
           </TouchableOpacity>
-        )}
-      </TouchableOpacity>
-    );
+        </Card>
+      );
+    }
+
+    // Empty products state
+    if (iapReady && !hasProducts) {
+      return (
+        <Card style={[styles.stateCard, styles.warningCard]}>
+          <View style={styles.stateContent}>
+            <Ionicons name="information-circle" size={24} color={COLORS.warning} />
+            <View style={styles.stateTextContainer}>
+              <Text style={styles.warningTitle}>Abbonamento temporaneamente non disponibile</Text>
+              <Text style={styles.warningMessage}>
+                Riprova tra qualche minuto
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity style={styles.retryButton} onPress={refreshProducts}>
+            <Ionicons name="refresh" size={20} color={COLORS.accent} />
+            <Text style={styles.retryText}>Aggiorna</Text>
+          </TouchableOpacity>
+        </Card>
+      );
+    }
+
+    return null;
   };
 
-  // Render product debug info
-  const renderProductDebug = () => {
-    if (!showDebug || !shouldUseNativeIAP()) return null;
+  // Render debug info (only in dev mode)
+  const renderDebug = () => {
+    if (!showDebug || !__DEV__) return null;
 
     return (
       <Card style={styles.debugCard}>
         <Text style={styles.debugTitle}>Debug IAP</Text>
-        <Text style={styles.debugText}>Platform: {Platform.OS}</Text>
-        <Text style={styles.debugText}>SKUs richiesti: {ACTIVE_SUBSCRIPTION_SKUS.join(', ')}</Text>
-        <Text style={styles.debugText}>Prodotti caricati: {iapProducts.length}</Text>
-        {iapProducts.map((p: any, i: number) => (
-          <Text key={i} style={styles.debugText}>
-            → {p.id}: {p.displayPrice || p.price || 'N/A'}
-          </Text>
-        ))}
+        <Text style={styles.debugText}>State: {iapState}</Text>
+        <Text style={styles.debugText}>Connected: {iapConnected ? 'Yes' : 'No'}</Text>
+        <Text style={styles.debugText}>Products: {iapProducts?.length || 0}</Text>
+        <Text style={styles.debugText}>SKUs: {ACTIVE_SUBSCRIPTION_SKUS.join(', ')}</Text>
         {iapError && (
-          <>
-            <Text style={[styles.debugText, { color: COLORS.error }]}>
-              Errore: {iapError.code}
-            </Text>
-            <Text style={[styles.debugText, { color: COLORS.error }]}>
-              {iapError.message}
-            </Text>
-            <Text style={[styles.debugText, { color: COLORS.textMuted }]}>
-              Step: {iapError.step}
-            </Text>
-          </>
+          <Text style={[styles.debugText, { color: COLORS.error }]}>
+            Error: {iapError.code} - {iapError.message}
+          </Text>
         )}
       </Card>
     );
   };
-
-  if (isLoading) {
-    return <LoadingSpinner fullScreen message={t('loading')} />;
-  }
-
-  // Determine if subscribe button should be enabled
-  const canSubscribe = shouldUseNativeIAP()
-    ? (iapReady && iapProducts.length > 0 && !isPurchasing && !isProcessing)
-    : !isProcessing;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -431,18 +450,27 @@ export default function ClubSubscriptionScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('subscription')}</Text>
-        <TouchableOpacity onPress={() => setShowDebug(!showDebug)}>
-          <Ionicons name="bug-outline" size={24} color={showDebug ? COLORS.accent : COLORS.textMuted} />
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Abbonamento</Text>
+        {__DEV__ && (
+          <TouchableOpacity onPress={() => setShowDebug(!showDebug)}>
+            <Ionicons name="bug-outline" size={24} color={showDebug ? COLORS.accent : COLORS.textMuted} />
+          </TouchableOpacity>
+        )}
+        {!__DEV__ && <View style={{ width: 24 }} />}
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* IAP Status Banner */}
-        {renderIAPStatus()}
+      <ScrollView 
+        contentContainerStyle={[
+          styles.scrollContent,
+          isTablet && styles.scrollContentTablet
+        ]} 
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Debug Info */}
+        {renderDebug()}
 
-        {/* Product Debug Info */}
-        {renderProductDebug()}
+        {/* IAP State (Loading/Error/Empty) */}
+        {renderIAPState()}
 
         {/* Current Status */}
         {club && (
@@ -467,35 +495,29 @@ export default function ClubSubscriptionScreen() {
             </View>
             {club.subscription_expires_at && (
               <Text style={styles.expiresText}>
-                {club.subscription_status === 'active' ? t('subscription_expires') : 'Scade il'}:{' '}
+                {club.subscription_status === 'active' ? 'Scade il' : 'Scaduto il'}:{' '}
                 {format(parseISO(club.subscription_expires_at), 'dd/MM/yyyy')}
               </Text>
             )}
           </Card>
         )}
 
-        {/* Plans */}
-        <Text style={styles.sectionTitle}>{t('pricing')}</Text>
+        {/* Plan Selection */}
+        <Text style={styles.sectionTitle}>Piano Premium</Text>
 
         {Object.entries(plans).map(([planId, plan]) => {
-          const storePrice = getStorePrice(plan.productId);
+          const displayPrice = getStorePrice(plan.productId);
 
           return (
             <TouchableOpacity
               key={planId}
-              onPress={() => setSelectedPlan(planId as 'monthly' | 'yearly')}
+              onPress={() => setSelectedPlan(planId as 'monthly')}
+              activeOpacity={0.7}
             >
-              <Card
-                style={[
-                  styles.planCard,
-                  selectedPlan === planId && styles.planCardSelected,
-                ]}
-              >
-                {'savings' in plan && plan.savings && (
-                  <View style={styles.savingsBadge}>
-                    <Text style={styles.savingsText}>Risparmia {plan.savings}</Text>
-                  </View>
-                )}
+              <Card style={[
+                styles.planCard,
+                selectedPlan === planId && styles.planCardSelected,
+              ]}>
                 <View style={styles.planHeader}>
                   <View style={[
                     styles.radioOuter,
@@ -511,15 +533,10 @@ export default function ClubSubscriptionScreen() {
                   </View>
                   <View style={styles.planPrice}>
                     {promoApplied && promoDiscount > 0 && (
-                      <Text style={styles.originalPrice}>€{plan.price.toFixed(2)}</Text>
+                      <Text style={styles.originalPrice}>${plan.price.toFixed(2)}</Text>
                     )}
-                    <Text style={styles.priceValue}>
-                      {storePrice || `€${getDiscountedPrice(plan.price).toFixed(2)}`}
-                    </Text>
+                    <Text style={styles.priceValue}>{displayPrice}</Text>
                     <Text style={styles.pricePeriod}>{plan.period}</Text>
-                    {!storePrice && shouldUseNativeIAP() && (
-                      <Text style={styles.priceNote}>(prezzo indicativo)</Text>
-                    )}
                   </View>
                 </View>
               </Card>
@@ -527,7 +544,35 @@ export default function ClubSubscriptionScreen() {
           );
         })}
 
-        {/* Promo Code Section - Only show if not using IAP */}
+        {/* APPLE COMPLIANCE: Subscription Info Section - REQUIRED */}
+        <Card style={styles.subscriptionInfoCard}>
+          <Text style={styles.subscriptionInfoTitle}>Dettagli Abbonamento</Text>
+          
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Nome:</Text>
+            <Text style={styles.infoValue}>Abbonamento Mensile</Text>
+          </View>
+          
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Durata:</Text>
+            <Text style={styles.infoValue}>1 mese</Text>
+          </View>
+          
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Prezzo:</Text>
+            <Text style={styles.infoValue}>{getStorePrice(PRODUCT_IDS.MONTHLY)}</Text>
+          </View>
+
+          <View style={styles.autoRenewContainer}>
+            <Ionicons name="refresh-circle" size={20} color={COLORS.warning} />
+            <Text style={styles.autoRenewText}>
+              L'abbonamento si rinnova automaticamente ogni mese. 
+              Puoi annullarlo in qualsiasi momento dalle impostazioni del tuo account {Platform.OS === 'ios' ? 'App Store' : 'Google Play'}.
+            </Text>
+          </View>
+        </Card>
+
+        {/* Promo Code (Web only) */}
         {!shouldUseNativeIAP() && (
           <Card style={styles.promoCard}>
             <View style={styles.promoHeader}>
@@ -564,7 +609,7 @@ export default function ClubSubscriptionScreen() {
                   disabled={isValidatingPromo}
                 >
                   {isValidatingPromo ? (
-                    <Ionicons name="hourglass-outline" size={20} color={COLORS.text} />
+                    <ActivityIndicator size="small" color={COLORS.text} />
                   ) : (
                     <Text style={styles.promoButtonText}>Applica</Text>
                   )}
@@ -574,7 +619,7 @@ export default function ClubSubscriptionScreen() {
           </Card>
         )}
 
-        {/* Features */}
+        {/* Features List */}
         <Card style={styles.featuresCard}>
           <Text style={styles.featuresTitle}>Cosa include:</Text>
           {[
@@ -595,28 +640,20 @@ export default function ClubSubscriptionScreen() {
         {/* Subscribe Button */}
         <Button
           title={
-            promoApplied && promoType === 'trial_months'
-              ? `Attiva prova ${promoValue} mesi`
-              : (club?.subscription_status === 'active' ? 'Cambia piano' : t('subscribe'))
+            isIAPLoading ? 'Caricamento...' :
+            isIAPError ? 'Non disponibile' :
+            promoApplied && promoType === 'trial_months' ? `Attiva prova ${promoValue} mesi` :
+            club?.subscription_status === 'active' ? 'Cambia piano' : 'Abbonati ora'
           }
           onPress={handleSubscribe}
           loading={isProcessing || isPurchasing}
-          disabled={!canSubscribe}
+          disabled={!canSubscribe || isIAPLoading || isIAPError}
           fullWidth
           size="large"
           style={styles.subscribeButton}
         />
 
-        {/* Disabled reason */}
-        {shouldUseNativeIAP() && !canSubscribe && !isPurchasing && !isProcessing && (
-          <Text style={styles.disabledReason}>
-            {!iapConnected && 'Store non connesso. '}
-            {iapConnected && iapProducts.length === 0 && 'Prodotti non caricati. '}
-            {iapError && `Errore: ${iapError.message}`}
-          </Text>
-        )}
-
-        {/* Restore Purchases - Only for mobile */}
+        {/* Restore Purchases (Mobile only) */}
         {shouldUseNativeIAP() && (
           <TouchableOpacity
             style={styles.restoreButton}
@@ -629,12 +666,26 @@ export default function ClubSubscriptionScreen() {
           </TouchableOpacity>
         )}
 
-        <Text style={styles.disclaimer}>
-          Pagamento sicuro tramite {getPaymentMethodLabel()}.{' '}
-          {shouldUseNativeIAP()
-            ? 'L\'abbonamento si rinnova automaticamente.'
-            : 'Puoi cancellare in qualsiasi momento.'}
-        </Text>
+        {/* APPLE COMPLIANCE: Legal Links - REQUIRED */}
+        <View style={styles.legalSection}>
+          <Text style={styles.legalTitle}>Termini e condizioni</Text>
+          <View style={styles.legalLinks}>
+            <TouchableOpacity onPress={openPrivacyPolicy} style={styles.legalLink}>
+              <Ionicons name="document-text-outline" size={16} color={COLORS.accent} />
+              <Text style={styles.legalLinkText}>Privacy Policy</Text>
+            </TouchableOpacity>
+            <Text style={styles.legalSeparator}>•</Text>
+            <TouchableOpacity onPress={openTermsOfUse} style={styles.legalLink}>
+              <Ionicons name="document-text-outline" size={16} color={COLORS.accent} />
+              <Text style={styles.legalLinkText}>Termini di utilizzo (EULA)</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.legalDisclaimer}>
+            Pagamento sicuro tramite {getPaymentMethodLabel()}.{' '}
+            L'abbonamento si rinnova automaticamente alla fine di ogni periodo di fatturazione. 
+            Puoi annullare il rinnovo automatico in qualsiasi momento dalle impostazioni del tuo account.
+          </Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -650,7 +701,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 12,
   },
   backButton: {
     width: 44,
@@ -667,48 +718,76 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingBottom: 24,
+    paddingBottom: 40,
   },
-  iapStatusBanner: {
+  scrollContentTablet: {
+    paddingHorizontal: 40,
+    maxWidth: 600,
+    alignSelf: 'center',
+    width: '100%',
+  },
+  // State cards
+  stateCard: {
+    marginBottom: 16,
+    padding: 16,
+  },
+  errorCard: {
+    borderColor: COLORS.error,
+    borderWidth: 1,
+  },
+  warningCard: {
+    borderColor: COLORS.warning,
+    borderWidth: 1,
+  },
+  stateContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: COLORS.surface,
-    borderRadius: 10,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
   },
-  iapStatusBannerError: {
-    borderColor: COLORS.error,
-    backgroundColor: COLORS.error + '10',
-  },
-  iapStatusBannerSuccess: {
-    borderColor: COLORS.success,
-    backgroundColor: COLORS.success + '10',
-  },
-  iapStatusTextContainer: {
+  stateTextContainer: {
     flex: 1,
-    marginLeft: 10,
+    marginLeft: 12,
   },
-  iapStatusText: {
+  stateText: {
     fontSize: 14,
+    color: COLORS.textSecondary,
+    marginLeft: 12,
+  },
+  errorTitle: {
+    fontSize: 16,
     fontWeight: '600',
-  },
-  iapDebugText: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    marginTop: 2,
-  },
-  iapErrorText: {
-    fontSize: 11,
     color: COLORS.error,
-    marginTop: 2,
+  },
+  errorMessage: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+    marginTop: 4,
+  },
+  warningTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.warning,
+  },
+  warningMessage: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+    marginTop: 4,
   },
   retryButton: {
-    padding: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    padding: 10,
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
   },
+  retryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.accent,
+    marginLeft: 8,
+  },
+  // Debug
   debugCard: {
     marginBottom: 16,
     backgroundColor: COLORS.surface,
@@ -727,6 +806,7 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     marginBottom: 2,
   },
+  // Status
   statusCard: {
     marginBottom: 24,
   },
@@ -761,33 +841,20 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 8,
   },
+  // Section
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: COLORS.text,
     marginBottom: 16,
   },
+  // Plan card
   planCard: {
     marginBottom: 12,
-    position: 'relative',
   },
   planCardSelected: {
     borderWidth: 2,
     borderColor: COLORS.secondary,
-  },
-  savingsBadge: {
-    position: 'absolute',
-    top: -10,
-    right: 16,
-    backgroundColor: COLORS.success,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  savingsText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.text,
   },
   planHeader: {
     flexDirection: 'row',
@@ -843,14 +910,53 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textMuted,
   },
-  priceNote: {
-    fontSize: 10,
-    color: COLORS.textMuted,
-    fontStyle: 'italic',
-  },
-  promoCard: {
+  // Subscription info - Apple compliance
+  subscriptionInfoCard: {
+    marginTop: 8,
     marginBottom: 16,
     backgroundColor: COLORS.surface,
+  },
+  subscriptionInfoTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 12,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+  },
+  infoValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  autoRenewContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: COLORS.warning + '15',
+    borderRadius: 8,
+  },
+  autoRenewText: {
+    flex: 1,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginLeft: 8,
+    lineHeight: 18,
+  },
+  // Promo
+  promoCard: {
+    marginBottom: 16,
   },
   promoHeader: {
     flexDirection: 'row',
@@ -884,6 +990,8 @@ const styles = StyleSheet.create({
     marginRight: 4,
     marginVertical: 4,
     borderRadius: 10,
+    minWidth: 80,
+    alignItems: 'center',
   },
   promoButtonText: {
     fontSize: 14,
@@ -912,8 +1020,8 @@ const styles = StyleSheet.create({
   removePromoButton: {
     padding: 4,
   },
+  // Features
   featuresCard: {
-    marginTop: 12,
     marginBottom: 24,
   },
   featuresTitle: {
@@ -925,35 +1033,68 @@ const styles = StyleSheet.create({
   featureRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   featureText: {
     fontSize: 14,
     color: COLORS.textSecondary,
     marginLeft: 10,
+    flex: 1,
   },
+  // Buttons
   subscribeButton: {
-    marginBottom: 8,
-  },
-  disabledReason: {
-    fontSize: 12,
-    color: COLORS.error,
-    textAlign: 'center',
     marginBottom: 12,
   },
   restoreButton: {
     alignItems: 'center',
     padding: 12,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   restoreButtonText: {
     fontSize: 14,
     color: COLORS.accent,
     textDecorationLine: 'underline',
   },
-  disclaimer: {
-    fontSize: 12,
+  // Legal section - Apple compliance
+  legalSection: {
+    marginTop: 8,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  legalTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  legalLinks: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginBottom: 12,
+  },
+  legalLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+  },
+  legalLinkText: {
+    fontSize: 14,
+    color: COLORS.accent,
+    marginLeft: 4,
+    textDecorationLine: 'underline',
+  },
+  legalSeparator: {
+    color: COLORS.textMuted,
+    marginHorizontal: 4,
+  },
+  legalDisclaimer: {
+    fontSize: 11,
     color: COLORS.textMuted,
     textAlign: 'center',
+    lineHeight: 16,
   },
 });
