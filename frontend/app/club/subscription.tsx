@@ -27,8 +27,9 @@ import { useSubscription, shouldUseNativeIAP, PRODUCT_IDS, ACTIVE_SUBSCRIPTION_S
 import { successHaptic, errorHaptic } from '../../src/utils/haptics';
 
 // Legal URLs - REQUIRED for Apple compliance - MUST BE FUNCTIONAL
+// CRITICAL: Use PRODUCTION domains only - Apple rejects preview/staging URLs
 const LEGAL_URLS = {
-  PRIVACY_POLICY: 'https://padel-finder-app.preview.emergentagent.com/api/privacy',
+  PRIVACY_POLICY: 'https://matchsport24.com/privacy',
   TERMS_OF_USE: 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/',
 };
 
@@ -544,6 +545,45 @@ export default function ClubSubscriptionScreen() {
           ))}
         </Card>
 
+        {/* APPLE COMPLIANCE: PROMINENT Legal Links Section - REQUIRED */}
+        {/* This section MUST be visible before subscribe button */}
+        <Card style={styles.legalCard}>
+          <Text style={styles.legalCardTitle}>Termini e Condizioni</Text>
+          <Text style={styles.legalCardDescription}>
+            Proseguendo con l'abbonamento accetti i seguenti termini:
+          </Text>
+          
+          <TouchableOpacity 
+            onPress={openPrivacyPolicy} 
+            style={styles.prominentLegalLink}
+            activeOpacity={0.7}
+          >
+            <View style={styles.prominentLegalLinkContent}>
+              <Ionicons name="shield-checkmark" size={24} color={COLORS.accent} />
+              <View style={styles.prominentLegalLinkText}>
+                <Text style={styles.prominentLegalLinkTitle}>Privacy Policy</Text>
+                <Text style={styles.prominentLegalLinkUrl}>matchsport24.com/privacy</Text>
+              </View>
+            </View>
+            <Ionicons name="open-outline" size={20} color={COLORS.accent} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            onPress={openTermsOfUse} 
+            style={styles.prominentLegalLink}
+            activeOpacity={0.7}
+          >
+            <View style={styles.prominentLegalLinkContent}>
+              <Ionicons name="document-text" size={24} color={COLORS.accent} />
+              <View style={styles.prominentLegalLinkText}>
+                <Text style={styles.prominentLegalLinkTitle}>Termini di Utilizzo (EULA)</Text>
+                <Text style={styles.prominentLegalLinkUrl}>Apple Standard EULA</Text>
+              </View>
+            </View>
+            <Ionicons name="open-outline" size={20} color={COLORS.accent} />
+          </TouchableOpacity>
+        </Card>
+
         {/* Subscribe Button */}
         <Button
           title={
@@ -865,7 +905,7 @@ const styles = StyleSheet.create({
   },
   // Features
   featuresCard: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
   featuresTitle: {
     fontSize: 16,
@@ -883,6 +923,53 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginLeft: 10,
     flex: 1,
+  },
+  // PROMINENT LEGAL CARD - Apple compliance CRITICAL
+  legalCard: {
+    marginBottom: 20,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.accent + '30',
+  },
+  legalCardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 8,
+  },
+  legalCardDescription: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+    marginBottom: 16,
+  },
+  prominentLegalLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    backgroundColor: COLORS.background,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  prominentLegalLinkContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  prominentLegalLinkText: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  prominentLegalLinkTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  prominentLegalLinkUrl: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 2,
   },
   // Buttons
   subscribeButton: {
