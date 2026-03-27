@@ -2852,41 +2852,6 @@ async def root():
 async def health():
     return {"status": "healthy"}
 
-# Include the router in the main app
-app.include_router(api_router)
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Socket.IO events
-@sio.event
-async def connect(sid, environ):
-    logger.info(f"Client connected: {sid}")
-
-@sio.event
-async def disconnect(sid):
-    logger.info(f"Client disconnected: {sid}")
-
-@sio.event
-async def join_match_chat(sid, data):
-    match_id = data.get("match_id")
-    if match_id:
-        await sio.enter_room(sid, f"chat_{match_id}")
-        logger.info(f"Client {sid} joined chat room: chat_{match_id}")
-
-@sio.event
-async def leave_match_chat(sid, data):
-    match_id = data.get("match_id")
-    if match_id:
-        await sio.leave_room(sid, f"chat_{match_id}")
-        logger.info(f"Client {sid} left chat room: chat_{match_id}")
-
 # ======================= LEGAL PAGES (Apple App Store Compliance) =======================
 
 @api_router.get("/privacy", response_class=HTMLResponse)
@@ -2958,10 +2923,69 @@ async def privacy_policy():
     <h2>8. Contatti</h2>
     <p>Per domande sulla privacy, contattaci a: support@matchsport24.com</p>
     
-    <p style="margin-top: 50px; text-align: center; color: #64748B;">© 2026 Match Sport 24. Tutti i diritti riservati.</p>
+    <p style="margin-top: 50px; text-align: center; color: #64748B;">&copy; 2026 Match Sport 24. Tutti i diritti riservati.</p>
 </body>
 </html>
 """
+
+@api_router.get("/terms", response_class=HTMLResponse)
+async def terms_of_use():
+    """Terms of Use page - Redirects to Apple Standard EULA"""
+    return """
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Termini di Utilizzo - Match Sport 24</title>
+    <meta http-equiv="refresh" content="0;url=https://www.apple.com/legal/internet-services/itunes/dev/stdeula/">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #0F172A; color: #F8FAFC; text-align: center; }
+        a { color: #10B981; }
+    </style>
+</head>
+<body>
+    <h1>Termini di Utilizzo</h1>
+    <p>Stai per essere reindirizzato ai Termini di Utilizzo Standard Apple.</p>
+    <p><a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/">Clicca qui se non vieni reindirizzato automaticamente</a></p>
+</body>
+</html>
+"""
+
+# Include the router in the main app
+app.include_router(api_router)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Socket.IO events
+@sio.event
+async def connect(sid, environ):
+    logger.info(f"Client connected: {sid}")
+
+@sio.event
+async def disconnect(sid):
+    logger.info(f"Client disconnected: {sid}")
+
+@sio.event
+async def join_match_chat(sid, data):
+    match_id = data.get("match_id")
+    if match_id:
+        await sio.enter_room(sid, f"chat_{match_id}")
+        logger.info(f"Client {sid} joined chat room: chat_{match_id}")
+
+@sio.event
+async def leave_match_chat(sid, data):
+    match_id = data.get("match_id")
+    if match_id:
+        await sio.leave_room(sid, f"chat_{match_id}")
+        logger.info(f"Client {sid} left chat room: chat_{match_id}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
