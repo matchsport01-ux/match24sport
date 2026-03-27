@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.matchsport24.app",
-      "buildNumber": "21",
+      "buildNumber": "22",
       "infoPlist": {
         "NSCameraUsageDescription": "Match Sport 24 utilizza la fotocamera per scattare foto del tuo profilo e dei campi sportivi del tuo circolo, permettendoti di personalizzare il tuo account e mostrare le strutture ai giocatori.",
         "NSPhotoLibraryUsageDescription": "Match Sport 24 accede alla tua libreria foto per permetterti di caricare immagini del profilo, foto dei campi sportivi o del circolo, ad esempio per personalizzare l'account o condividere contenuti visivi con altri giocatori nella piattaforma.",
