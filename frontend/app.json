@@ -28,7 +28,7 @@
         "backgroundColor": "#000000"
       },
       "package": "com.matchsport24.app",
-      "versionCode": 8,
+      "versionCode": 9,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -61,6 +61,7 @@
           "cameraPermission": "Match Sport 24 utilizza la fotocamera per scattare foto del profilo o dei campi sportivi."
         }
       ],
+      "./plugins/withIAPDimensionStrategy.js",
       [
         "expo-iap",
         {
