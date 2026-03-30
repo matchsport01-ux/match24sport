@@ -48,7 +48,8 @@
         "appleTeamId": "584VX3RB4D"
       },
       "android": {
-        "track": "production"
+        "track": "internal",
+        "serviceAccountKeyPath": "./google-service-account.json"
       }
     }
   }
