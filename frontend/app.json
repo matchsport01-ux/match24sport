@@ -28,7 +28,7 @@
         "backgroundColor": "#000000"
       },
       "package": "com.matchsport24.app",
-      "versionCode": 6,
+      "versionCode": 8,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -61,7 +61,14 @@
           "cameraPermission": "Match Sport 24 utilizza la fotocamera per scattare foto del profilo o dei campi sportivi."
         }
       ],
-      "expo-iap",
+      [
+        "expo-iap",
+        {
+          "android": {
+            "storeType": "play"
+          }
+        }
+      ],
       [
         "expo-build-properties",
         {
@@ -72,7 +79,7 @@
             "compileSdkVersion": 34,
             "targetSdkVersion": 34,
             "minSdkVersion": 24,
-            "kotlinVersion": "2.0.0"
+            "extraMavenRepos": ["https://jitpack.io"]
           }
         }
       ]
