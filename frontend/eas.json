@@ -46,10 +46,6 @@
         "appleId": "andreaiannella@icloud.com",
         "ascAppId": "6760661319",
         "appleTeamId": "584VX3RB4D"
-      },
-      "android": {
-        "track": "internal",
-        "serviceAccountKeyPath": "./google-service-account.json"
       }
     }
   }
