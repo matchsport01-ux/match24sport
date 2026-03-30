@@ -30,9 +30,10 @@
       "package": "com.matchsport24.app",
       "versionCode": 6,
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ],
       "edgeToEdgeEnabled": true
     },
@@ -87,9 +88,10 @@
     },
     "extra": {
       "eas": {
-        "projectId": "001160bc-cc77-47f7-99d8-40bc720c9ded"
+        "projectId": "764426cd-23ab-4cb4-9f6b-c8dbf743dc9e"
       },
-      "backendUrl": "https://padel-finder-app.preview.emergentagent.com"
+      "backendUrl": "https://padel-finder-app.preview.emergentagent.com",
+      "router": {}
     },
     "owner": "match24",
     "primaryColor": "#10B981",
