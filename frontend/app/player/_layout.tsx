@@ -89,6 +89,12 @@ export default function PlayerLayout() {
           href: null,
         }}
       />
+      <Tabs.Screen
+        name="club"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }
