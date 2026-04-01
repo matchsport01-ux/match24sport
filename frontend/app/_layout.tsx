@@ -1,14 +1,32 @@
-// Root Layout with Providers
-import React from 'react';
+// Root Layout with Providers and Splash Screen
+import React, { useState, useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { LanguageProvider } from '../src/contexts/LanguageContext';
+import { SplashScreen } from '../src/components';
 import { COLORS } from '../src/utils/constants';
 
 export default function RootLayout() {
+  const [showSplash, setShowSplash] = useState(true);
+
+  const handleSplashComplete = () => {
+    setShowSplash(false);
+  };
+
+  if (showSplash) {
+    return (
+      <SafeAreaProvider>
+        <View style={styles.container}>
+          <StatusBar style="light" />
+          <SplashScreen onComplete={handleSplashComplete} />
+        </View>
+      </SafeAreaProvider>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <LanguageProvider>

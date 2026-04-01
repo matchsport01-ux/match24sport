@@ -1,7 +1,8 @@
-// Loading Spinner Component
+// Loading Spinner Component with Animated Logo
 import React from 'react';
-import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { COLORS } from '../utils/constants';
+import { LogoSpinner } from './AnimatedLogo';
 
 interface LoadingSpinnerProps {
   message?: string;
@@ -10,10 +11,12 @@ interface LoadingSpinnerProps {
 }
 
 export function LoadingSpinner({ message, size = 'large', fullScreen = false }: LoadingSpinnerProps) {
+  const logoSize = size === 'small' ? 40 : 70;
+  
   if (fullScreen) {
     return (
       <View style={styles.fullScreen}>
-        <ActivityIndicator size={size} color={COLORS.primary} />
+        <LogoSpinner size={logoSize} />
         {message && <Text style={styles.message}>{message}</Text>}
       </View>
     );
@@ -21,7 +24,7 @@ export function LoadingSpinner({ message, size = 'large', fullScreen = false }: 
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size={size} color={COLORS.primary} />
+      <LogoSpinner size={logoSize} />
       {message && <Text style={styles.message}>{message}</Text>}
     </View>
   );

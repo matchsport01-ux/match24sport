@@ -7,6 +7,8 @@ export { MatchCard } from './MatchCard';
 export { LoadingSpinner } from './LoadingSpinner';
 export { EmptyState } from './EmptyState';
 export { AnimatedCard } from './AnimatedCard';
+export { AnimatedLogo, LogoSpinner } from './AnimatedLogo';
+export { SplashScreen } from './SplashScreen';
 export { 
   Skeleton, 
   MatchCardSkeleton, 
