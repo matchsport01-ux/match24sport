@@ -936,7 +936,7 @@ async def delete_account(request: DeleteAccountRequest, user: dict = Depends(get
                 "anonymized_at": datetime.now(timezone.utc)
             }}
         )
-        logger.info(f"[ACCOUNT_DELETION] Anonymized player ratings")
+        logger.info("[ACCOUNT_DELETION] Anonymized player ratings")
         
         # 3i. Anonymize rating history
         await db.player_rating_history.update_many(
@@ -1406,6 +1406,310 @@ async def get_club(club_id: str):
     
     cache.set(cache_key, club, ttl_seconds=120)
     return club
+
+# ======================= CLUB REVIEWS ENDPOINTS =======================
+
+# Review Models
+class ReviewCreate(BaseModel):
+    rating: int = Field(..., ge=1, le=5, description="Rating from 1 to 5 stars")
+    comment: Optional[str] = Field(None, max_length=500, description="Optional review comment")
+
+class ReviewUpdate(BaseModel):
+    rating: Optional[int] = Field(None, ge=1, le=5)
+    comment: Optional[str] = Field(None, max_length=500)
+
+class ReviewReport(BaseModel):
+    reason: str = Field(..., min_length=5, max_length=200)
+
+# Review status constants
+REVIEW_STATUSES = ["active", "hidden", "removed"]
+
+async def update_club_rating(club_id: str):
+    """Recalculate and update club's average rating and review count"""
+    pipeline = [
+        {"$match": {"club_id": club_id, "status": "active"}},
+        {"$group": {
+            "_id": None,
+            "avg_rating": {"$avg": "$rating"},
+            "count": {"$sum": 1}
+        }}
+    ]
+    
+    result = await db.reviews.aggregate(pipeline).to_list(1)
+    
+    if result:
+        avg_rating = round(result[0]["avg_rating"], 1)
+        count = result[0]["count"]
+    else:
+        avg_rating = 0
+        count = 0
+    
+    await db.clubs.update_one(
+        {"club_id": club_id},
+        {"$set": {
+            "rating_average": avg_rating,
+            "reviews_count": count,
+            "updated_at": datetime.now(timezone.utc)
+        }}
+    )
+    
+    # Invalidate cache
+    cache.delete(f"club:{club_id}")
+    cache.invalidate_pattern("clubs_list")
+    
+    return avg_rating, count
+
+@api_router.post("/clubs/{club_id}/reviews")
+async def create_review(club_id: str, review_data: ReviewCreate, user: dict = Depends(get_current_user)):
+    """Create a new review for a club. Only authenticated players can review."""
+    
+    # Verify user is a player
+    if user.get("role") != "player":
+        raise HTTPException(status_code=403, detail="Solo i giocatori possono lasciare recensioni")
+    
+    # Verify club exists
+    club = await db.clubs.find_one({"club_id": club_id})
+    if not club:
+        raise HTTPException(status_code=404, detail="Circolo non trovato")
+    
+    # Check if user already reviewed this club
+    existing = await db.reviews.find_one({
+        "user_id": user["user_id"],
+        "club_id": club_id,
+        "status": {"$in": ["active", "hidden"]}
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail="Hai già recensito questo circolo")
+    
+    # Sanitize comment
+    comment = review_data.comment.strip() if review_data.comment else None
+    if comment and len(comment) > 500:
+        comment = comment[:500]
+    
+    review_id = f"rev_{uuid.uuid4().hex[:12]}"
+    
+    review = {
+        "review_id": review_id,
+        "user_id": user["user_id"],
+        "user_name": user.get("name", "Utente"),
+        "club_id": club_id,
+        "rating": review_data.rating,
+        "comment": comment,
+        "status": "active",
+        "is_reported": False,
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc)
+    }
+    
+    await db.reviews.insert_one(review)
+    
+    # Update club rating
+    avg_rating, count = await update_club_rating(club_id)
+    
+    logger.info(f"Review created: {review_id} for club {club_id} by user {user['user_id']}")
+    
+    return {
+        "review": {k: v for k, v in review.items() if k != "_id"},
+        "club_rating_average": avg_rating,
+        "club_reviews_count": count
+    }
+
+@api_router.get("/clubs/{club_id}/reviews")
+async def get_club_reviews(
+    club_id: str,
+    sort: str = Query("recent", enum=["recent", "oldest", "highest", "lowest"]),
+    limit: int = Query(20, ge=1, le=100),
+    skip: int = Query(0, ge=0),
+    request: Request = None
+):
+    """Get reviews for a club with sorting options"""
+    
+    # Verify club exists
+    club = await db.clubs.find_one({"club_id": club_id})
+    if not club:
+        raise HTTPException(status_code=404, detail="Circolo non trovato")
+    
+    # Build sort criteria
+    sort_map = {
+        "recent": [("created_at", -1)],
+        "oldest": [("created_at", 1)],
+        "highest": [("rating", -1), ("created_at", -1)],
+        "lowest": [("rating", 1), ("created_at", -1)]
+    }
+    sort_criteria = sort_map.get(sort, [("created_at", -1)])
+    
+    # Get reviews
+    reviews = await db.reviews.find(
+        {"club_id": club_id, "status": "active"},
+        {"_id": 0}
+    ).sort(sort_criteria).skip(skip).limit(limit).to_list(limit)
+    
+    # Enrich with user profile pictures
+    for review in reviews:
+        profile = await db.player_profiles.find_one(
+            {"user_id": review["user_id"]},
+            {"profile_picture": 1, "nickname": 1}
+        )
+        if profile:
+            review["user_profile_picture"] = profile.get("profile_picture")
+            review["user_nickname"] = profile.get("nickname")
+    
+    # Get current user's review if authenticated
+    user_review = None
+    try:
+        user = await get_optional_user(request)
+        if user:
+            user_review = await db.reviews.find_one(
+                {"user_id": user["user_id"], "club_id": club_id, "status": {"$in": ["active", "hidden"]}},
+                {"_id": 0}
+            )
+    except:
+        pass
+    
+    return {
+        "reviews": reviews,
+        "total": await db.reviews.count_documents({"club_id": club_id, "status": "active"}),
+        "club_rating_average": club.get("rating_average", 0),
+        "club_reviews_count": club.get("reviews_count", 0),
+        "user_review": user_review
+    }
+
+@api_router.patch("/reviews/{review_id}")
+async def update_review(review_id: str, review_data: ReviewUpdate, user: dict = Depends(get_current_user)):
+    """Update a review. Only the author can update their review."""
+    
+    review = await db.reviews.find_one({"review_id": review_id})
+    if not review:
+        raise HTTPException(status_code=404, detail="Recensione non trovata")
+    
+    # Check ownership
+    if review["user_id"] != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Non puoi modificare questa recensione")
+    
+    # Check status
+    if review["status"] == "removed":
+        raise HTTPException(status_code=400, detail="Questa recensione è stata rimossa")
+    
+    # Build update data
+    update_data = {"updated_at": datetime.now(timezone.utc)}
+    
+    if review_data.rating is not None:
+        update_data["rating"] = review_data.rating
+    
+    if review_data.comment is not None:
+        comment = review_data.comment.strip() if review_data.comment else None
+        if comment and len(comment) > 500:
+            comment = comment[:500]
+        update_data["comment"] = comment
+    
+    await db.reviews.update_one(
+        {"review_id": review_id},
+        {"$set": update_data}
+    )
+    
+    # Update club rating
+    avg_rating, count = await update_club_rating(review["club_id"])
+    
+    updated_review = await db.reviews.find_one({"review_id": review_id}, {"_id": 0})
+    
+    logger.info(f"Review updated: {review_id} by user {user['user_id']}")
+    
+    return {
+        "review": updated_review,
+        "club_rating_average": avg_rating,
+        "club_reviews_count": count
+    }
+
+@api_router.delete("/reviews/{review_id}")
+async def delete_review(review_id: str, user: dict = Depends(get_current_user)):
+    """Delete a review. Only the author can delete their review."""
+    
+    review = await db.reviews.find_one({"review_id": review_id})
+    if not review:
+        raise HTTPException(status_code=404, detail="Recensione non trovata")
+    
+    # Check ownership
+    if review["user_id"] != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Non puoi eliminare questa recensione")
+    
+    club_id = review["club_id"]
+    
+    # Soft delete - change status to removed
+    await db.reviews.update_one(
+        {"review_id": review_id},
+        {"$set": {"status": "removed", "updated_at": datetime.now(timezone.utc)}}
+    )
+    
+    # Update club rating
+    avg_rating, count = await update_club_rating(club_id)
+    
+    logger.info(f"Review deleted: {review_id} by user {user['user_id']}")
+    
+    return {
+        "message": "Recensione eliminata con successo",
+        "club_rating_average": avg_rating,
+        "club_reviews_count": count
+    }
+
+@api_router.post("/reviews/{review_id}/report")
+async def report_review(review_id: str, report_data: ReviewReport, user: dict = Depends(get_current_user)):
+    """Report a review as inappropriate"""
+    
+    review = await db.reviews.find_one({"review_id": review_id, "status": "active"})
+    if not review:
+        raise HTTPException(status_code=404, detail="Recensione non trovata")
+    
+    # Check if already reported by this user
+    existing_report = await db.review_reports.find_one({
+        "review_id": review_id,
+        "reported_by": user["user_id"]
+    })
+    if existing_report:
+        raise HTTPException(status_code=400, detail="Hai già segnalato questa recensione")
+    
+    report_id = f"report_{uuid.uuid4().hex[:12]}"
+    
+    report = {
+        "report_id": report_id,
+        "review_id": review_id,
+        "reported_by": user["user_id"],
+        "reason": report_data.reason.strip()[:200],
+        "created_at": datetime.now(timezone.utc)
+    }
+    
+    await db.review_reports.insert_one(report)
+    
+    # Mark review as reported
+    await db.reviews.update_one(
+        {"review_id": review_id},
+        {"$set": {"is_reported": True}}
+    )
+    
+    logger.info(f"Review reported: {review_id} by user {user['user_id']}")
+    
+    return {"message": "Segnalazione inviata. Grazie per il tuo contributo."}
+
+@api_router.get("/player/my-reviews")
+async def get_my_reviews(
+    user: dict = Depends(get_current_user),
+    limit: int = Query(20, ge=1, le=100),
+    skip: int = Query(0, ge=0)
+):
+    """Get all reviews by the current user"""
+    
+    reviews = await db.reviews.find(
+        {"user_id": user["user_id"], "status": {"$in": ["active", "hidden"]}},
+        {"_id": 0}
+    ).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    
+    # Enrich with club names
+    for review in reviews:
+        club = await db.clubs.find_one({"club_id": review["club_id"]}, {"name": 1, "city": 1})
+        if club:
+            review["club_name"] = club.get("name")
+            review["club_city"] = club.get("city")
+    
+    return reviews
 
 # ======================= COURT ENDPOINTS =======================
 
@@ -3075,6 +3379,18 @@ async def create_database_indexes():
         # Favorite clubs
         await db.favorite_clubs.create_index([("user_id", 1), ("club_id", 1)], unique=True)
         await db.favorite_clubs.create_index("user_id")
+        
+        # Reviews - CRITICAL: unique constraint user+club
+        await db.reviews.create_index("review_id", unique=True)
+        await db.reviews.create_index([("user_id", 1), ("club_id", 1)], unique=True)
+        await db.reviews.create_index("club_id")
+        await db.reviews.create_index([("club_id", 1), ("status", 1), ("created_at", -1)])
+        await db.reviews.create_index([("club_id", 1), ("status", 1), ("rating", -1)])
+        
+        # Review reports
+        await db.review_reports.create_index("report_id", unique=True)
+        await db.review_reports.create_index("review_id")
+        await db.review_reports.create_index([("review_id", 1), ("reported_by", 1)], unique=True)
         
         logger.info("Database indexes created successfully!")
         

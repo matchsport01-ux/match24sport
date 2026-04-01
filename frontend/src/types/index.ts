@@ -54,6 +54,8 @@ export interface Club {
   subscription_plan?: string;
   subscription_expires_at?: string;
   courts?: Court[];
+  rating_average?: number;
+  reviews_count?: number;
 }
 
 export interface Court {
@@ -140,3 +142,26 @@ export interface SubscriptionPlan {
 
 export type Sport = 'padel' | 'tennis' | 'calcetto';
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'all';
+
+export interface Review {
+  review_id: string;
+  user_id: string;
+  user_name: string;
+  user_nickname?: string;
+  user_profile_picture?: string;
+  club_id: string;
+  rating: number;
+  comment?: string;
+  status: 'active' | 'hidden' | 'removed';
+  is_reported: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReviewReport {
+  report_id: string;
+  review_id: string;
+  reported_by: string;
+  reason: string;
+  created_at: string;
+}

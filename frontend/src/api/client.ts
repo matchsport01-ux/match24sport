@@ -460,6 +460,38 @@ class APIClient {
     const response = await this.client.get('/subscription/iap/status');
     return response.data;
   }
+
+  // ======================= REVIEWS =======================
+
+  async getClubReviews(clubId: string, params?: { sort?: string; limit?: number; skip?: number }) {
+    const response = await this.client.get(`/clubs/${clubId}/reviews`, { params });
+    return response.data;
+  }
+
+  async createReview(clubId: string, data: { rating: number; comment?: string }) {
+    const response = await this.client.post(`/clubs/${clubId}/reviews`, data);
+    return response.data;
+  }
+
+  async updateReview(reviewId: string, data: { rating?: number; comment?: string }) {
+    const response = await this.client.patch(`/reviews/${reviewId}`, data);
+    return response.data;
+  }
+
+  async deleteReview(reviewId: string) {
+    const response = await this.client.delete(`/reviews/${reviewId}`);
+    return response.data;
+  }
+
+  async reportReview(reviewId: string, reason: string) {
+    const response = await this.client.post(`/reviews/${reviewId}/report`, { reason });
+    return response.data;
+  }
+
+  async getMyReviews(params?: { limit?: number; skip?: number }) {
+    const response = await this.client.get('/player/my-reviews', { params });
+    return response.data;
+  }
 }
 
 export const apiClient = new APIClient();
