@@ -11,7 +11,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { MatchCard, EmptyState, Card, MatchCardSkeleton, RatingCardSkeleton } from '../../src/components';
+import { MatchCard, EmptyState, Card, MatchCardSkeleton, RatingCardSkeleton, SportImage } from '../../src/components';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useLanguage } from '../../src/contexts/LanguageContext';
 import { COLORS, SPORTS } from '../../src/utils/constants';
@@ -184,11 +184,7 @@ export default function PlayerHomeScreen() {
                 return (
                   <Card key={sport.id} style={[styles.ratingCard, { borderColor: sport.color }]}>
                     <View style={[styles.sportIconContainer, { backgroundColor: sport.color + '20' }]}>
-                      <Ionicons
-                        name={sport.id === 'calcetto' || sport.id === 'calcio8' ? 'football-outline' : 'tennisball-outline'}
-                        size={24}
-                        color={sport.color}
-                      />
+                      <SportImage sport={sport.id} size={28} />
                     </View>
                     <Text style={styles.sportName}>{sport.name}</Text>
                     <Text style={[styles.ratingValue, { color: sport.color }]}>

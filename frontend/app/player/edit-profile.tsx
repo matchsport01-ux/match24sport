@@ -17,7 +17,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Button, Input, Card, LoadingSpinner } from '../../src/components';
+import { Button, Input, Card, LoadingSpinner, SportImage } from '../../src/components';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useLanguage } from '../../src/contexts/LanguageContext';
 import { COLORS, SPORTS, SKILL_LEVELS } from '../../src/utils/constants';
@@ -287,11 +287,7 @@ export default function EditProfileScreen() {
                   ]}
                   onPress={() => toggleSport(sport.id)}
                 >
-                  <Ionicons
-                    name={sport.id === 'calcetto' ? 'football-outline' : 'tennisball-outline'}
-                    size={24}
-                    color={selectedSports.includes(sport.id) ? sport.color : COLORS.textMuted}
-                  />
+                  <SportImage sport={sport.id} size={28} />
                   <Text
                     style={[
                       styles.sportCardText,

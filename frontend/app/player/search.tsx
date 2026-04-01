@@ -12,7 +12,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { MatchCard, EmptyState, ListSkeleton } from '../../src/components';
+import { MatchCard, EmptyState, ListSkeleton, SportImage } from '../../src/components';
 import { useLanguage } from '../../src/contexts/LanguageContext';
 import { COLORS, SPORTS, SKILL_LEVELS } from '../../src/utils/constants';
 import { apiClient } from '../../src/api/client';
@@ -166,11 +166,7 @@ export default function PlayerSearchScreen() {
                       setSelectedSport(selectedSport === sport.id ? null : sport.id);
                     }}
                   >
-                    <Ionicons
-                      name={sport.id === 'calcetto' ? 'football-outline' : 'tennisball-outline'}
-                      size={16}
-                      color={selectedSport === sport.id ? COLORS.text : sport.color}
-                    />
+                    <SportImage sport={sport.id} size={18} />
                     <Text
                       style={[
                         styles.filterChipText,

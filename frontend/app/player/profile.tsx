@@ -12,7 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, LoadingSpinner, Button } from '../../src/components';
+import { Card, LoadingSpinner, Button, SportImage } from '../../src/components';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useLanguage } from '../../src/contexts/LanguageContext';
 import { COLORS, SPORTS } from '../../src/utils/constants';
@@ -148,11 +148,7 @@ export default function PlayerProfileScreen() {
               <Card key={sport.id} style={styles.ratingCard}>
                 <View style={styles.ratingHeader}>
                   <View style={[styles.sportIcon, { backgroundColor: sport.color + '20' }]}>
-                    <Ionicons
-                      name={sport.id === 'calcetto' ? 'football-outline' : 'tennisball-outline'}
-                      size={24}
-                      color={sport.color}
-                    />
+                    <SportImage sport={sport.id} size={28} />
                   </View>
                   <View style={styles.ratingInfo}>
                     <Text style={styles.sportName}>{sport.name}</Text>
