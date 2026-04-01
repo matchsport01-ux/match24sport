@@ -3433,6 +3433,68 @@ async def startup_create_demo_accounts():
     else:
         logger.info("Apple Reviewer account already exists")
     
+    # Create Demo Club account
+    demo_club = await db.users.find_one({"email": "demo@club.com"})
+    if not demo_club:
+        logger.info("Creating Demo Club account...")
+        demo_club_user = {
+            "user_id": f"user_{uuid.uuid4().hex[:12]}",
+            "email": "demo@club.com",
+            "password_hash": pwd_context.hash("DemoClub2024!"),
+            "name": "Demo Club Admin",
+            "role": "club",
+            "is_active": True,
+            "language": "it",
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }
+        await db.users.insert_one(demo_club_user)
+        
+        # Create club
+        demo_club_data = {
+            "club_id": f"club_{uuid.uuid4().hex[:12]}",
+            "admin_user_id": demo_club_user["user_id"],
+            "name": "Centro Sportivo Demo",
+            "description": "Centro sportivo dimostrativo con campi da padel, tennis e calcetto. Prenota la tua partita!",
+            "address": "Via Roma 123",
+            "city": "Roma",
+            "phone": "+39 06 1234567",
+            "email": "demo@club.com",
+            "website": "https://matchsport24.com",
+            "is_active": True,
+            "subscription_status": "active",
+            "subscription_plan": "premium",
+            "rating_average": 4.5,
+            "reviews_count": 0,
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }
+        await db.clubs.insert_one(demo_club_data)
+        
+        # Create demo courts
+        courts = [
+            {"name": "Campo Padel 1", "sport": "padel", "surface": "erba_sintetica", "indoor": False},
+            {"name": "Campo Padel 2", "sport": "padel", "surface": "erba_sintetica", "indoor": True},
+            {"name": "Campo Tennis", "sport": "tennis", "surface": "terra_rossa", "indoor": False},
+            {"name": "Campo Calcetto", "sport": "calcetto", "surface": "erba_sintetica", "indoor": False},
+        ]
+        for court in courts:
+            court_data = {
+                "court_id": f"court_{uuid.uuid4().hex[:12]}",
+                "club_id": demo_club_data["club_id"],
+                "name": court["name"],
+                "sport": court["sport"],
+                "surface": court["surface"],
+                "indoor": court["indoor"],
+                "is_active": True,
+                "created_at": datetime.now(timezone.utc),
+            }
+            await db.courts.insert_one(court_data)
+        
+        logger.info("Demo Club account created successfully!")
+    else:
+        logger.info("Demo Club account already exists")
+    
     # Clean up past matches
     await cleanup_past_matches()
 
