@@ -1,38 +1,36 @@
-// Main Entry Screen - Modern Welcome Page
+// Main Entry Screen - Welcome Page (Compact, No Scroll)
 import React, { useEffect, useState } from 'react';
 import { 
   View, 
   Text, 
   StyleSheet, 
   Image, 
-  Dimensions, 
   Platform,
   TouchableOpacity,
-  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withDelay,
-  withSequence,
-  withTiming,
-  FadeInUp,
-  FadeInDown,
-} from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Button, SportIcon, LoadingSpinner } from '../src/components';
+import { Button, LoadingSpinner } from '../src/components';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useLanguage } from '../src/contexts/LanguageContext';
-import { COLORS, SPORTS } from '../src/utils/constants';
+import { COLORS } from '../src/utils/constants';
 
-const { width, height } = Dimensions.get('window');
+// Sport icons URLs
+const SPORT_ICONS: Record<string, string> = {
+  padel: 'https://customer-assets.emergentagent.com/job_padel-finder-app/artifacts/3cxy0zew_padel%20%281%29.png',
+  tennis: 'https://customer-assets.emergentagent.com/job_padel-finder-app/artifacts/z6g71agz_tennis%20%281%29.png',
+  calcetto: 'https://customer-assets.emergentagent.com/job_padel-finder-app/artifacts/vba4q5gu_calcetto.png',
+  calcio8: 'https://customer-assets.emergentagent.com/job_padel-finder-app/artifacts/s1kuk84k_calcio%20a%208.png',
+};
 
-const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+const SPORTS_DATA = [
+  { id: 'padel', name: 'Padel' },
+  { id: 'tennis', name: 'Tennis' },
+  { id: 'calcetto', name: 'Calcetto' },
+  { id: 'calcio8', name: 'Calcio a 8' },
+];
 
 export default function Index() {
   const router = useRouter();
@@ -40,7 +38,6 @@ export default function Index() {
   const { t } = useLanguage();
   const [showContent, setShowContent] = useState(false);
 
-  // Simple approach: show content after max 2 seconds OR when auth check is done
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowContent(true);
@@ -78,7 +75,7 @@ export default function Index() {
     }
   }, [showContent, isAuthenticated, user]);
 
-  // Check onboarding only once when content is ready
+  // Check onboarding
   useEffect(() => {
     if (showContent && !isAuthenticated) {
       AsyncStorage.getItem('onboarding_completed').then((completed) => {
@@ -95,145 +92,89 @@ export default function Index() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Logo Section */}
-        <Animated.View 
-          entering={FadeInDown.duration(600).delay(100)}
-          style={styles.logoSection}
-        >
-          <Image
-            source={require('../assets/images/logo-24.png')}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
-          <Text style={styles.logoText}>Match Sport 24</Text>
-        </Animated.View>
+      {/* Header with Logo */}
+      <View style={styles.header}>
+        <Image
+          source={require('../assets/images/logo-24.png')}
+          style={styles.logoImage}
+          resizeMode="contain"
+        />
+        <Text style={styles.logoText}>Match Sport 24</Text>
+      </View>
 
-        {/* Hero Section */}
-        <Animated.View 
-          entering={FadeInUp.duration(600).delay(200)}
-          style={styles.heroSection}
-        >
-          <Text style={styles.heroTitle}>{t('welcome')}</Text>
-          <Text style={styles.heroSubtitle}>
-            Trova e prenota partite di Padel, Tennis, Calcetto e Calcio a 8 nella tua città
-          </Text>
-        </Animated.View>
+      {/* Hero Section */}
+      <View style={styles.heroSection}>
+        <Text style={styles.heroTitle}>{t('welcome')}</Text>
+        <Text style={styles.heroSubtitle}>
+          Trova e prenota partite di Padel, Tennis, Calcetto e Calcio a 8 nella tua città
+        </Text>
 
-        {/* Sports Grid - Modern Cards */}
-        <Animated.View 
-          entering={FadeInUp.duration(600).delay(300)}
-          style={styles.sportsGrid}
-        >
-          {SPORTS.map((sport, index) => (
-            <Animated.View
-              key={sport.id}
-              entering={FadeInUp.duration(400).delay(400 + index * 100)}
-              style={[styles.sportCard, { borderColor: sport.color + '40' }]}
-            >
-              <LinearGradient
-                colors={[sport.color + '20', sport.color + '05']}
-                style={styles.sportCardGradient}
-              >
-                <View style={[styles.sportIconWrapper, { backgroundColor: sport.color + '25' }]}>
-                  <SportIcon sport={sport.id as any} size={32} color={sport.color} />
-                </View>
-                <Text style={[styles.sportCardName, { color: sport.color }]}>
-                  {sport.name}
-                </Text>
-              </LinearGradient>
-            </Animated.View>
+        {/* Sports Row with Custom Icons */}
+        <View style={styles.sportsRow}>
+          {SPORTS_DATA.map((sport) => (
+            <View key={sport.id} style={styles.sportItem}>
+              <Image
+                source={{ uri: SPORT_ICONS[sport.id] }}
+                style={styles.sportIcon}
+                resizeMode="contain"
+              />
+              <Text style={styles.sportName}>{sport.name}</Text>
+            </View>
           ))}
-        </Animated.View>
+        </View>
+      </View>
 
-        {/* CTA Buttons */}
-        <Animated.View 
-          entering={FadeInUp.duration(600).delay(600)}
-          style={styles.ctaSection}
-        >
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() => router.push('/auth/register')}
-            activeOpacity={0.85}
-          >
-            <LinearGradient
-              colors={[COLORS.primary, COLORS.primaryDark]}
-              style={styles.buttonGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              <Ionicons name="person-add-outline" size={22} color="#FFF" />
-              <Text style={styles.primaryButtonText}>{t('register_as_player')}</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+      {/* CTA Section */}
+      <View style={styles.ctaSection}>
+        <Button
+          title={t('register_as_player')}
+          onPress={() => router.push('/auth/register')}
+          variant="primary"
+          size="large"
+          fullWidth
+          icon={<Ionicons name="person-outline" size={20} color={COLORS.text} />}
+        />
 
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => router.push('/auth/register-club')}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="business-outline" size={22} color={COLORS.secondary} />
-            <Text style={styles.secondaryButtonText}>{t('register_as_club')}</Text>
-          </TouchableOpacity>
+        <Button
+          title={t('register_as_club')}
+          onPress={() => router.push('/auth/register-club')}
+          variant="outline"
+          size="large"
+          fullWidth
+          style={styles.secondaryButton}
+          icon={<Ionicons name="business-outline" size={20} color={COLORS.primary} />}
+        />
 
-          {/* Divider */}
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>{t('have_account')}</Text>
-            <View style={styles.dividerLine} />
-          </View>
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>{t('have_account')}</Text>
+          <View style={styles.dividerLine} />
+        </View>
 
-          <TouchableOpacity
-            style={styles.loginButton}
-            onPress={() => router.push('/auth/login')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.loginButtonText}>{t('login')}</Text>
-            <Ionicons name="arrow-forward" size={18} color={COLORS.primary} />
-          </TouchableOpacity>
-        </Animated.View>
+        <Button
+          title={t('login')}
+          onPress={() => router.push('/auth/login')}
+          variant="ghost"
+          size="large"
+          fullWidth
+        />
+      </View>
 
-        {/* Features Section */}
-        <Animated.View 
-          entering={FadeInUp.duration(600).delay(700)}
-          style={styles.featuresSection}
-        >
-          <View style={styles.featureItem}>
-            <View style={[styles.featureIcon, { backgroundColor: COLORS.primary + '20' }]}>
-              <Ionicons name="search" size={20} color={COLORS.primary} />
-            </View>
-            <Text style={styles.featureTitle}>Trova</Text>
-            <Text style={styles.featureDesc}>partite</Text>
-          </View>
-          
-          <View style={styles.featureItem}>
-            <View style={[styles.featureIcon, { backgroundColor: COLORS.secondary + '20' }]}>
-              <Ionicons name="chatbubbles" size={20} color={COLORS.secondary} />
-            </View>
-            <Text style={styles.featureTitle}>Chat</Text>
-            <Text style={styles.featureDesc}>di gruppo</Text>
-          </View>
-          
-          <View style={styles.featureItem}>
-            <View style={[styles.featureIcon, { backgroundColor: COLORS.accent + '20' }]}>
-              <Ionicons name="trophy" size={20} color={COLORS.accent} />
-            </View>
-            <Text style={styles.featureTitle}>Rating</Text>
-            <Text style={styles.featureDesc}>ELO</Text>
-          </View>
-          
-          <View style={styles.featureItem}>
-            <View style={[styles.featureIcon, { backgroundColor: COLORS.calcio8 + '20' }]}>
-              <Ionicons name="star" size={20} color={COLORS.calcio8} />
-            </View>
-            <Text style={styles.featureTitle}>Recensioni</Text>
-            <Text style={styles.featureDesc}>circoli</Text>
-          </View>
-        </Animated.View>
-      </ScrollView>
+      {/* Features Row */}
+      <View style={styles.features}>
+        <View style={styles.featureItem}>
+          <Ionicons name="search-outline" size={24} color={COLORS.primary} />
+          <Text style={styles.featureText}>Trova partite</Text>
+        </View>
+        <View style={styles.featureItem}>
+          <Ionicons name="chatbubbles-outline" size={24} color={COLORS.secondary} />
+          <Text style={styles.featureText}>Chat di gruppo</Text>
+        </View>
+        <View style={styles.featureItem}>
+          <Ionicons name="trophy-outline" size={24} color={COLORS.accent} />
+          <Text style={styles.featureText}>Rating ELO</Text>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -242,117 +183,74 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-  scrollContent: {
-    flexGrow: 1,
     paddingHorizontal: 24,
-    paddingBottom: 32,
   },
-  logoSection: {
+  header: {
+    paddingVertical: 16,
     alignItems: 'center',
-    paddingTop: 16,
-    paddingBottom: 8,
   },
   logoImage: {
-    width: 90,
-    height: 90,
+    width: 80,
+    height: 80,
   },
   logoText: {
     fontSize: 22,
     fontWeight: '800',
     color: COLORS.text,
-    marginTop: 8,
-    letterSpacing: 0.5,
+    marginTop: 6,
   },
   heroSection: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: 16,
   },
   heroTitle: {
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: '800',
     color: COLORS.text,
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   heroSubtitle: {
     fontSize: 16,
     color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
-    paddingHorizontal: 8,
+    marginBottom: 24,
   },
-  sportsGrid: {
+  sportsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    paddingVertical: 16,
-    gap: 12,
-  },
-  sportCard: {
-    width: (width - 60) / 2,
-    borderRadius: 16,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  sportCardGradient: {
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-  },
-  sportIconWrapper: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    alignItems: 'center',
+    gap: 16,
+    flexWrap: 'wrap',
   },
-  sportCardName: {
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.3,
+  sportItem: {
+    alignItems: 'center',
+    width: 70,
+  },
+  sportIcon: {
+    width: 48,
+    height: 48,
+    marginBottom: 6,
+  },
+  sportName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    textAlign: 'center',
   },
   ctaSection: {
-    paddingVertical: 24,
-  },
-  primaryButton: {
-    borderRadius: 14,
-    overflow: 'hidden',
-    marginBottom: 12,
-  },
-  buttonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    gap: 10,
-  },
-  primaryButtonText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#FFF',
+    paddingBottom: 16,
   },
   secondaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: COLORS.secondary + '50',
-    backgroundColor: COLORS.secondary + '10',
-    gap: 10,
-  },
-  secondaryButtonText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: COLORS.secondary,
+    marginTop: 12,
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 24,
+    marginVertical: 16,
   },
   dividerLine: {
     flex: 1,
@@ -364,45 +262,19 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     fontSize: 14,
   },
-  loginButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    gap: 8,
-  },
-  loginButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.primary,
-  },
-  featuresSection: {
+  features: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingTop: 20,
-    paddingBottom: 16,
+    paddingVertical: 16,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
   featureItem: {
     alignItems: 'center',
   },
-  featureIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  featureTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  featureDesc: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    marginTop: 2,
+  featureText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 6,
   },
 });
