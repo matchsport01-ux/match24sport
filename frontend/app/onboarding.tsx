@@ -88,7 +88,7 @@ export default function OnboardingScreen() {
     } catch (error) {
       console.error('Error saving onboarding state:', error);
     }
-    router.replace('/auth/login');
+    router.replace('/');
   };
 
   const currentSlide = slides[currentIndex];

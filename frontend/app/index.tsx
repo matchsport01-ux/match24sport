@@ -1,17 +1,38 @@
-// Main Entry Screen - Landing/Auth Check - Stable Version
+// Main Entry Screen - Modern Welcome Page
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, Dimensions, Platform } from 'react-native';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  Image, 
+  Dimensions, 
+  Platform,
+  TouchableOpacity,
+  ScrollView,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withDelay,
+  withSequence,
+  withTiming,
+  FadeInUp,
+  FadeInDown,
+} from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Button } from '../src/components';
+import { Button, SportIcon, LoadingSpinner } from '../src/components';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useLanguage } from '../src/contexts/LanguageContext';
 import { COLORS, SPORTS } from '../src/utils/constants';
-import { LoadingSpinner } from '../src/components/LoadingSpinner';
 
 const { width, height } = Dimensions.get('window');
+
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 export default function Index() {
   const router = useRouter();
@@ -25,7 +46,6 @@ export default function Index() {
       setShowContent(true);
     }, 2000);
 
-    // If auth is already done, show content immediately
     if (!authLoading) {
       setShowContent(true);
       clearTimeout(timer);
@@ -65,97 +85,155 @@ export default function Index() {
         if (!completed) {
           router.replace('/onboarding');
         }
-      }).catch(() => {
-        // If error checking, just show the welcome screen
-      });
+      }).catch(() => {});
     }
   }, [showContent, isAuthenticated]);
 
-  // Show loading only briefly
   if (!showContent) {
     return <LoadingSpinner fullScreen message={t('loading')} />;
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Image
-          source={{ uri: 'https://customer-assets.emergentagent.com/job_padel-finder-app/artifacts/np98g9bo_logo%20pagna%20benvenuto.png' }}
-          style={styles.logoImage}
-          resizeMode="contain"
-        />
-        <Text style={styles.logoText}>Match Sport 24</Text>
-      </View>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Logo Section */}
+        <Animated.View 
+          entering={FadeInDown.duration(600).delay(100)}
+          style={styles.logoSection}
+        >
+          <Image
+            source={require('../assets/images/logo-24.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
+          <Text style={styles.logoText}>Match Sport 24</Text>
+        </Animated.View>
 
-      <View style={styles.heroSection}>
-        <Text style={styles.heroTitle}>{t('welcome')}</Text>
-        <Text style={styles.heroSubtitle}>
-          Trova e prenota partite di Padel, Tennis, Calcetto e Calcio a 8 nella tua citt\u00e0
-        </Text>
+        {/* Hero Section */}
+        <Animated.View 
+          entering={FadeInUp.duration(600).delay(200)}
+          style={styles.heroSection}
+        >
+          <Text style={styles.heroTitle}>{t('welcome')}</Text>
+          <Text style={styles.heroSubtitle}>
+            Trova e prenota partite di Padel, Tennis, Calcetto e Calcio a 8 nella tua città
+          </Text>
+        </Animated.View>
 
-        <View style={styles.sportsRow}>
-          {SPORTS.map((sport) => (
-            <View key={sport.id} style={[styles.sportItem, { backgroundColor: sport.color + '20' }]}>
-              <Ionicons
-                name={sport.id === 'calcetto' || sport.id === 'calcio8' ? 'football-outline' : 'tennisball-outline'}
-                size={24}
-                color={sport.color}
-              />
-              <Text style={[styles.sportName, { color: sport.color }]}>{sport.name}</Text>
-            </View>
+        {/* Sports Grid - Modern Cards */}
+        <Animated.View 
+          entering={FadeInUp.duration(600).delay(300)}
+          style={styles.sportsGrid}
+        >
+          {SPORTS.map((sport, index) => (
+            <Animated.View
+              key={sport.id}
+              entering={FadeInUp.duration(400).delay(400 + index * 100)}
+              style={[styles.sportCard, { borderColor: sport.color + '40' }]}
+            >
+              <LinearGradient
+                colors={[sport.color + '20', sport.color + '05']}
+                style={styles.sportCardGradient}
+              >
+                <View style={[styles.sportIconWrapper, { backgroundColor: sport.color + '25' }]}>
+                  <SportIcon sport={sport.id as any} size={32} color={sport.color} />
+                </View>
+                <Text style={[styles.sportCardName, { color: sport.color }]}>
+                  {sport.name}
+                </Text>
+              </LinearGradient>
+            </Animated.View>
           ))}
-        </View>
-      </View>
+        </Animated.View>
 
-      <View style={styles.ctaSection}>
-        <Button
-          title={t('register_as_player')}
-          onPress={() => router.push('/auth/register')}
-          variant="primary"
-          size="large"
-          fullWidth
-          icon={<Ionicons name="person-outline" size={20} color={COLORS.text} />}
-        />
+        {/* CTA Buttons */}
+        <Animated.View 
+          entering={FadeInUp.duration(600).delay(600)}
+          style={styles.ctaSection}
+        >
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => router.push('/auth/register')}
+            activeOpacity={0.85}
+          >
+            <LinearGradient
+              colors={[COLORS.primary, COLORS.primaryDark]}
+              style={styles.buttonGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Ionicons name="person-add-outline" size={22} color="#FFF" />
+              <Text style={styles.primaryButtonText}>{t('register_as_player')}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
 
-        <Button
-          title={t('register_as_club')}
-          onPress={() => router.push('/auth/register-club')}
-          variant="outline"
-          size="large"
-          fullWidth
-          style={styles.secondaryButton}
-          icon={<Ionicons name="business-outline" size={20} color={COLORS.primary} />}
-        />
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => router.push('/auth/register-club')}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="business-outline" size={22} color={COLORS.secondary} />
+            <Text style={styles.secondaryButtonText}>{t('register_as_club')}</Text>
+          </TouchableOpacity>
 
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>{t('have_account')}</Text>
-          <View style={styles.dividerLine} />
-        </View>
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>{t('have_account')}</Text>
+            <View style={styles.dividerLine} />
+          </View>
 
-        <Button
-          title={t('login')}
-          onPress={() => router.push('/auth/login')}
-          variant="ghost"
-          size="large"
-          fullWidth
-        />
-      </View>
+          <TouchableOpacity
+            style={styles.loginButton}
+            onPress={() => router.push('/auth/login')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.loginButtonText}>{t('login')}</Text>
+            <Ionicons name="arrow-forward" size={18} color={COLORS.primary} />
+          </TouchableOpacity>
+        </Animated.View>
 
-      <View style={styles.features}>
-        <View style={styles.featureItem}>
-          <Ionicons name="search-outline" size={24} color={COLORS.primary} />
-          <Text style={styles.featureText}>Trova partite</Text>
-        </View>
-        <View style={styles.featureItem}>
-          <Ionicons name="chatbubbles-outline" size={24} color={COLORS.secondary} />
-          <Text style={styles.featureText}>Chat di gruppo</Text>
-        </View>
-        <View style={styles.featureItem}>
-          <Ionicons name="trophy-outline" size={24} color={COLORS.accent} />
-          <Text style={styles.featureText}>Rating ELO</Text>
-        </View>
-      </View>
+        {/* Features Section */}
+        <Animated.View 
+          entering={FadeInUp.duration(600).delay(700)}
+          style={styles.featuresSection}
+        >
+          <View style={styles.featureItem}>
+            <View style={[styles.featureIcon, { backgroundColor: COLORS.primary + '20' }]}>
+              <Ionicons name="search" size={20} color={COLORS.primary} />
+            </View>
+            <Text style={styles.featureTitle}>Trova</Text>
+            <Text style={styles.featureDesc}>partite</Text>
+          </View>
+          
+          <View style={styles.featureItem}>
+            <View style={[styles.featureIcon, { backgroundColor: COLORS.secondary + '20' }]}>
+              <Ionicons name="chatbubbles" size={20} color={COLORS.secondary} />
+            </View>
+            <Text style={styles.featureTitle}>Chat</Text>
+            <Text style={styles.featureDesc}>di gruppo</Text>
+          </View>
+          
+          <View style={styles.featureItem}>
+            <View style={[styles.featureIcon, { backgroundColor: COLORS.accent + '20' }]}>
+              <Ionicons name="trophy" size={20} color={COLORS.accent} />
+            </View>
+            <Text style={styles.featureTitle}>Rating</Text>
+            <Text style={styles.featureDesc}>ELO</Text>
+          </View>
+          
+          <View style={styles.featureItem}>
+            <View style={[styles.featureIcon, { backgroundColor: COLORS.calcio8 + '20' }]}>
+              <Ionicons name="star" size={20} color={COLORS.calcio8} />
+            </View>
+            <Text style={styles.featureTitle}>Recensioni</Text>
+            <Text style={styles.featureDesc}>circoli</Text>
+          </View>
+        </Animated.View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -164,70 +242,117 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
-    paddingHorizontal: 24,
   },
-  header: {
-    paddingVertical: 16,
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingBottom: 32,
+  },
+  logoSection: {
     alignItems: 'center',
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   logoImage: {
-    width: 100,
-    height: 100,
+    width: 90,
+    height: 90,
   },
   logoText: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
     color: COLORS.text,
     marginTop: 8,
+    letterSpacing: 0.5,
   },
   heroSection: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 32,
+    paddingVertical: 20,
   },
   heroTitle: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: '800',
     color: COLORS.text,
     textAlign: 'center',
     marginBottom: 12,
   },
   heroSubtitle: {
-    fontSize: 18,
+    fontSize: 16,
     color: COLORS.textSecondary,
     textAlign: 'center',
-    lineHeight: 26,
-    marginBottom: 32,
+    lineHeight: 24,
+    paddingHorizontal: 8,
   },
-  sportsRow: {
+  sportsGrid: {
     flexDirection: 'row',
-    justifyContent: 'center',
     flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
     gap: 12,
   },
-  sportItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 24,
+  sportCard: {
+    width: (width - 60) / 2,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
   },
-  sportName: {
+  sportCardGradient: {
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  sportIconWrapper: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  sportCardName: {
     fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   ctaSection: {
-    paddingBottom: 24,
+    paddingVertical: 24,
+  },
+  primaryButton: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  buttonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 10,
+  },
+  primaryButtonText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFF',
   },
   secondaryButton: {
-    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: COLORS.secondary + '50',
+    backgroundColor: COLORS.secondary + '10',
+    gap: 10,
+  },
+  secondaryButtonText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: COLORS.secondary,
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 20,
+    marginVertical: 24,
   },
   dividerLine: {
     flex: 1,
@@ -239,19 +364,45 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     fontSize: 14,
   },
-  features: {
+  loginButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 8,
+  },
+  loginButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  featuresSection: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingVertical: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
   featureItem: {
     alignItems: 'center',
   },
-  featureText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 6,
+  featureIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  featureTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  featureDesc: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
   },
 });
