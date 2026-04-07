@@ -38,7 +38,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isTablet = SCREEN_WIDTH >= 768;
 
 // Static pricing - MUST match App Store Connect exactly
-const STATIC_PRICE = '$49.99';
+const STATIC_PRICE = '€49,99';
 const STATIC_PRICE_VALUE = 49.99;
 
 export default function ClubSubscriptionScreen() {
