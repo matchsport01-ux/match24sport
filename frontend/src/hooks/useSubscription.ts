@@ -400,24 +400,69 @@ function useSubscriptionNative(): UseSubscriptionResult {
     log('INFO', 'PURCHASE_START', 'Starting purchase for:', productId);
 
     try {
-      const { requestSubscription, finishTransaction } = iapFunctionsRef.current;
+      const iapFuncs = iapFunctionsRef.current;
+      
+      // Check which purchase function is available
+      const requestSubscription = iapFuncs.requestSubscription;
+      const requestPurchase = iapFuncs.requestPurchase;
+      const finishTransaction = iapFuncs.finishTransaction;
 
       const subscription = subscriptions.find(s => 
         s.productId === productId || s.id === productId
       );
       
-      let purchaseParams: any = { sku: productId };
+      let purchase: any = null;
       
-      // Android requires offer token
-      if (Platform.OS === 'android' && subscription?.subscriptionOfferDetails) {
-        const offer = subscription.subscriptionOfferDetails[0];
-        if (offer?.offerToken) {
-          purchaseParams.subscriptionOffers = [{ sku: productId, offerToken: offer.offerToken }];
+      // Android purchase flow
+      if (Platform.OS === 'android') {
+        log('INFO', 'PURCHASE', 'Android purchase flow');
+        
+        // Build Android purchase params
+        let androidParams: any = { skus: [productId] };
+        
+        // Add offer token if available (required for subscriptions)
+        if (subscription?.subscriptionOfferDetails) {
+          const offer = subscription.subscriptionOfferDetails[0];
+          if (offer?.offerToken) {
+            androidParams = {
+              subscriptionOffers: [{ 
+                sku: productId, 
+                offerToken: offer.offerToken 
+              }]
+            };
+          }
+        }
+        
+        log('INFO', 'PURCHASE', 'Android params:', JSON.stringify(androidParams));
+        
+        // Try requestSubscription first (for subscriptions)
+        if (typeof requestSubscription === 'function') {
+          log('INFO', 'PURCHASE', 'Using requestSubscription');
+          purchase = await requestSubscription(androidParams);
+        } 
+        // Fallback to requestPurchase
+        else if (typeof requestPurchase === 'function') {
+          log('INFO', 'PURCHASE', 'Fallback to requestPurchase');
+          purchase = await requestPurchase(androidParams);
+        } 
+        else {
+          throw new Error('No purchase function available');
+        }
+      } 
+      // iOS purchase flow
+      else {
+        let purchaseParams: any = { sku: productId };
+        
+        log('INFO', 'PURCHASE', 'iOS purchase with params:', purchaseParams);
+        
+        if (typeof requestSubscription === 'function') {
+          purchase = await requestSubscription(purchaseParams);
+        } else if (typeof requestPurchase === 'function') {
+          purchase = await requestPurchase(purchaseParams);
+        } else {
+          throw new Error('No purchase function available');
         }
       }
-
-      log('INFO', 'PURCHASE', 'Calling requestSubscription with:', purchaseParams);
-      const purchase = await requestSubscription(purchaseParams);
       log('INFO', 'PURCHASE_RESULT', 'Purchase result:', purchase);
 
       if (purchase) {
