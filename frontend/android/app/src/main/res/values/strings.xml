@@ -25,19 +25,61 @@
     <string name="login">Login</string>
     <string name="logout">Logout</string>
     <string name="register">Register</string>
+    <string name="confirm">Confirm</string>
+    <string name="success">Success</string>
+    <string name="no_results">No results</string>
+    <string name="try_again">Try again</string>
+    
+    <!-- Auth strings -->
+    <string name="email">Email</string>
+    <string name="password">Password</string>
+    <string name="name">Name</string>
+    <string name="nickname">Nickname</string>
+    <string name="welcome">Welcome</string>
+    <string name="register_as_player">Register as Player</string>
+    <string name="register_as_club">Register as Club</string>
+    <string name="have_account">Already have an account?</string>
+    <string name="no_account">Don\'t have an account?</string>
+    <string name="forgot_password">Forgot password?</string>
+    
+    <!-- Profile strings -->
+    <string name="city">City</string>
+    <string name="preferred_sports">Preferred Sports</string>
+    <string name="notifications">Notifications</string>
+    <string name="language">Language</string>
+    <string name="about">About</string>
+    <string name="privacy">Privacy</string>
+    <string name="terms">Terms</string>
+    <string name="contact">Contact</string>
+    <string name="support">Support</string>
+    <string name="version">Version</string>
     
     <!-- Sports -->
     <string name="padel">Padel</string>
     <string name="tennis">Tennis</string>
     <string name="calcetto">Calcetto</string>
     <string name="calcio8">Calcio a 8</string>
+    <string name="sport">Sport</string>
     
-    <!-- Matches -->
+    <!-- Match strings -->
     <string name="match">Match</string>
     <string name="matches">Matches</string>
     <string name="create_match">Create Match</string>
     <string name="join_match">Join Match</string>
     <string name="leave_match">Leave Match</string>
+    <string name="match_details">Match Details</string>
+    <string name="players">Players</string>
+    <string name="players_count">Players Count</string>
+    <string name="date">Date</string>
+    <string name="time">Time</string>
+    <string name="price">Price</string>
+    
+    <!-- Skill levels -->
+    <string name="level">Level</string>
+    <string name="beginner">Beginner</string>
+    <string name="intermediate">Intermediate</string>
+    <string name="advanced">Advanced</string>
+    <string name="all_levels">All Levels</string>
     
     <!-- Clubs -->
     <string name="club">Club</string>
