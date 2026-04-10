@@ -62,6 +62,7 @@
         }
       ],
       "./plugins/withIAPDimensionStrategy.js",
+      "./plugins/withAndroidStrings.js",
       [
         "expo-iap",
         {
