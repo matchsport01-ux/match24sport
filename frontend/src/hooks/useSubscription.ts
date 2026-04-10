@@ -451,16 +451,42 @@ function useSubscriptionNative(): UseSubscriptionResult {
       } 
       // iOS purchase flow
       else {
-        let purchaseParams: any = { sku: productId };
+        // CRITICAL FIX: StoreKit 2 uses different parameter names
+        // Try multiple parameter formats for compatibility
+        log('INFO', 'PURCHASE', 'iOS purchase flow starting...');
+        log('INFO', 'PURCHASE', 'Product ID:', productId);
+        log('INFO', 'PURCHASE', 'Available functions:', {
+          hasRequestSubscription: typeof requestSubscription === 'function',
+          hasRequestPurchase: typeof requestPurchase === 'function',
+        });
         
-        log('INFO', 'PURCHASE', 'iOS purchase with params:', purchaseParams);
+        // StoreKit 2 format - uses 'product' or 'sku'
+        const purchaseParams: any = { 
+          sku: productId,
+          // Also include as 'request' format for some expo-iap versions
+          andDangerouslyFinishTransactionAutomaticallyIOS: false,
+        };
         
-        if (typeof requestSubscription === 'function') {
-          purchase = await requestSubscription(purchaseParams);
-        } else if (typeof requestPurchase === 'function') {
-          purchase = await requestPurchase(purchaseParams);
-        } else {
-          throw new Error('No purchase function available');
+        log('INFO', 'PURCHASE', 'iOS purchase params:', JSON.stringify(purchaseParams));
+        
+        try {
+          if (typeof requestSubscription === 'function') {
+            log('INFO', 'PURCHASE', 'Calling requestSubscription...');
+            purchase = await requestSubscription(purchaseParams);
+            log('INFO', 'PURCHASE', 'requestSubscription completed');
+          } else if (typeof requestPurchase === 'function') {
+            log('INFO', 'PURCHASE', 'Fallback to requestPurchase...');
+            purchase = await requestPurchase(purchaseParams);
+            log('INFO', 'PURCHASE', 'requestPurchase completed');
+          } else {
+            log('ERROR', 'PURCHASE', 'No purchase function available!');
+            throw new Error('No purchase function available - IAP module may not be initialized');
+          }
+        } catch (purchaseErr: any) {
+          log('ERROR', 'PURCHASE', 'Purchase call failed:', purchaseErr.message);
+          log('ERROR', 'PURCHASE', 'Error code:', purchaseErr.code);
+          log('ERROR', 'PURCHASE', 'Error details:', JSON.stringify(purchaseErr));
+          throw purchaseErr;
         }
       }
       log('INFO', 'PURCHASE_RESULT', 'Purchase result:', purchase);

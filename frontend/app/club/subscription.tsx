@@ -194,36 +194,98 @@ export default function ClubSubscriptionScreen() {
 
   // Handle native IAP purchase
   const handleIAPPurchase = async () => {
+    // CRITICAL: Comprehensive logging for Apple Review debugging
+    console.log('[IAP] handleIAPPurchase called');
+    console.log('[IAP] iapState:', iapState);
+    console.log('[IAP] iapConnected:', iapConnected);
+    console.log('[IAP] iapReady:', iapReady);
+    console.log('[IAP] iapProducts count:', iapProducts?.length || 0);
+    console.log('[IAP] iapProducts:', JSON.stringify(iapProducts?.map((p: any) => ({
+      id: p.productId || p.id,
+      price: p.localizedPrice || p.displayPrice,
+    }))));
+    
+    // Check if IAP is still initializing
+    if (iapState === 'initializing' || iapState === 'connecting' || iapState === 'fetching') {
+      console.log('[IAP] Still loading, showing wait message');
+      Alert.alert(
+        'Caricamento',
+        'Stiamo caricando le informazioni dell\'abbonamento. Attendi qualche secondo e riprova.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    
     // Check if products are available
     if (!iapProducts || iapProducts.length === 0) {
+      console.log('[IAP] No products available');
+      console.log('[IAP] Attempting to refresh products...');
+      
+      // Try to refresh products
+      try {
+        await refreshProducts();
+        // Wait a moment for state to update
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (refreshErr) {
+        console.log('[IAP] Refresh failed:', refreshErr);
+      }
+      
+      // Check again after refresh
+      if (!iapProducts || iapProducts.length === 0) {
+        Alert.alert(
+          'Abbonamento',
+          'L\'abbonamento sarà disponibile a breve. Riprova tra qualche minuto.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+    }
+
+    // Verify the specific product exists
+    const targetProduct = iapProducts.find((p: any) => 
+      (p.productId === plan.productId) || (p.id === plan.productId)
+    );
+    
+    console.log('[IAP] Target product:', plan.productId);
+    console.log('[IAP] Found product:', targetProduct ? 'YES' : 'NO');
+    
+    if (!targetProduct) {
+      console.log('[IAP] Product not found in available products');
       Alert.alert(
         'Abbonamento',
-        'L\'abbonamento sarà disponibile a breve. Riprova tra qualche minuto.',
+        'Prodotto non disponibile. Riprova più tardi.',
         [{ text: 'OK' }]
       );
       return;
     }
 
     setIsProcessing(true);
+    console.log('[IAP] Starting purchase for:', plan.productId);
+    
     try {
       const result = await purchaseSubscription(plan.productId);
+      console.log('[IAP] Purchase result:', JSON.stringify(result));
 
       if (result.error === 'cancelled') {
+        console.log('[IAP] Purchase cancelled by user');
         setIsProcessing(false);
         return;
       }
 
       if (!result.success) {
+        console.log('[IAP] Purchase failed:', result.error);
         errorHaptic();
         Alert.alert('Attenzione', result.error || 'Acquisto non completato. Riprova.');
         setIsProcessing(false);
         return;
       }
 
+      console.log('[IAP] Purchase successful!');
       successHaptic();
       Alert.alert('Successo!', 'Abbonamento attivato con successo!');
       await fetchClub();
-    } catch (error) {
+    } catch (error: any) {
+      console.log('[IAP] Purchase exception:', error?.message || error);
       errorHaptic();
       Alert.alert('Attenzione', 'Si è verificato un problema. Riprova più tardi.');
     } finally {
@@ -356,8 +418,16 @@ export default function ClubSubscriptionScreen() {
   // Determine if we're on native
   const isNativeMode = shouldUseNativeIAP();
   
-  // Button state - ALWAYS enabled for Apple review
-  const isButtonLoading = isProcessing || isPurchasing;
+  // CRITICAL FIX: Track IAP initialization state
+  // Disable button during initialization to prevent "undefined is not a function" errors
+  const isIAPInitializing = isNativeMode && (
+    iapState === 'initializing' || 
+    iapState === 'connecting' || 
+    iapState === 'fetching'
+  );
+  
+  // Button state - loading during processing OR during IAP initialization
+  const isButtonLoading = isProcessing || isPurchasing || isIAPInitializing;
 
   // Render loading state
   if (isLoading) {
